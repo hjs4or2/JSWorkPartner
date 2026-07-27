@@ -1,0 +1,37 @@
+# Visual Studio / local IDE state
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Codex / agent-local state
+.agents/
+.codex/
+.git-local/
+enc_temp_folder/
+
+# C++ and Qt build output
+**/x64/
+**/Debug/
+**/Release/
+*.obj
+*.pdb
+*.ilk
+*.exe
+*.dll
+*.exp
+*.lib
+*.tlog
+*.recipe
+*.log
+
+# Local application data
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# OS files
+.DS_Store
+Thumbs.db

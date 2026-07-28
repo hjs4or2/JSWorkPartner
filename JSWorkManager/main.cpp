@@ -59,7 +59,7 @@ int main(int argc, char* argv[])
     {
         QMessageBox::critical(
             nullptr,
-            QStringLiteral("업무 로드 실패"),
+            QStringLiteral("퀘스트 로드 실패"),
             !pendingViewModel.lastError().isEmpty()
                 ? pendingViewModel.lastError()
                 : completedViewModel.lastError());

@@ -173,7 +173,7 @@ bool TaskQueueViewModel::addTask(
     const QString normalizedExternalUrl = externalUrl.trimmed();
     if (normalizedTitle.isEmpty())
     {
-        lastError_ = QStringLiteral("업무 제목을 입력해 주세요.");
+        lastError_ = QStringLiteral("퀘스트 제목을 입력해 주세요.");
         return false;
     }
 
@@ -187,7 +187,7 @@ bool TaskQueueViewModel::addTask(
     {
         lastError_ = repository_.lastError().isEmpty()
                          ? QStringLiteral(
-                               "같은 제목의 업무가 이미 있습니다. 다른 제목을 입력해 주세요.")
+                               "같은 제목의 퀘스트가 이미 있습니다. 다른 제목을 입력해 주세요.")
                          : repository_.lastError();
         return false;
     }
@@ -225,7 +225,7 @@ bool TaskQueueViewModel::addTask(
         return false;
     }
 
-    lastMessage_ = QStringLiteral("%1번 업무가 저장되어 Queue에 추가되었습니다.")
+    lastMessage_ = QStringLiteral("%1번 퀘스트가 저장되었습니다.")
                        .arg(createdTask.sequence);
     lastError_.clear();
     return true;
@@ -241,7 +241,7 @@ bool TaskQueueViewModel::updateTask(
 {
     if (row < 0 || row >= tasks_.size())
     {
-        lastError_ = QStringLiteral("수정할 업무를 선택해 주세요.");
+        lastError_ = QStringLiteral("수정할 퀘스트를 선택해 주세요.");
         return false;
     }
 
@@ -250,7 +250,7 @@ bool TaskQueueViewModel::updateTask(
     const Task task = tasks_.at(row);
     if (normalizedTitle.isEmpty())
     {
-        lastError_ = QStringLiteral("업무 제목을 입력해 주세요.");
+        lastError_ = QStringLiteral("퀘스트 제목을 입력해 주세요.");
         return false;
     }
 
@@ -264,7 +264,7 @@ bool TaskQueueViewModel::updateTask(
     {
         lastError_ = repository_.lastError().isEmpty()
                          ? QStringLiteral(
-                               "같은 제목의 업무가 이미 있습니다. 다른 제목을 입력해 주세요.")
+                               "같은 제목의 퀘스트가 이미 있습니다. 다른 제목을 입력해 주세요.")
                          : repository_.lastError();
         return false;
     }
@@ -300,7 +300,7 @@ bool TaskQueueViewModel::updateTask(
         return false;
     }
 
-    lastMessage_ = QStringLiteral("%1번 업무를 수정했습니다.")
+    lastMessage_ = QStringLiteral("%1번 퀘스트를 수정했습니다.")
                        .arg(task.sequence);
     lastError_.clear();
     return true;
@@ -310,13 +310,13 @@ bool TaskQueueViewModel::completeTask(int row)
 {
     if (showingCompleted_)
     {
-        lastError_ = QStringLiteral("완료 목록의 업무는 다시 완료 처리할 수 없습니다.");
+        lastError_ = QStringLiteral("완료한 퀘스트는 다시 완료 처리할 수 없습니다.");
         return false;
     }
 
     if (row < 0 || row >= tasks_.size())
     {
-        lastError_ = QStringLiteral("완료할 업무를 선택해 주세요.");
+        lastError_ = QStringLiteral("완료할 퀘스트를 선택해 주세요.");
         return false;
     }
 
@@ -332,7 +332,7 @@ bool TaskQueueViewModel::completeTask(int row)
         return false;
     }
 
-    lastMessage_ = QStringLiteral("%1번 업무를 완료 처리했습니다.")
+    lastMessage_ = QStringLiteral("%1번 퀘스트를 완료했습니다.")
                        .arg(task.sequence);
     lastError_.clear();
     return true;
@@ -342,7 +342,7 @@ bool TaskQueueViewModel::deleteTask(int row)
 {
     if (row < 0 || row >= tasks_.size())
     {
-        lastError_ = QStringLiteral("삭제할 업무를 선택해 주세요.");
+        lastError_ = QStringLiteral("삭제할 퀘스트를 선택해 주세요.");
         return false;
     }
 
@@ -358,7 +358,7 @@ bool TaskQueueViewModel::deleteTask(int row)
         return false;
     }
 
-    lastMessage_ = QStringLiteral("%1번 업무를 삭제했습니다.")
+    lastMessage_ = QStringLiteral("%1번 퀘스트를 삭제했습니다.")
                        .arg(task.sequence);
     lastError_.clear();
     return true;

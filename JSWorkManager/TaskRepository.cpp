@@ -113,7 +113,7 @@ QList<Task> TaskRepository::loadTasks(bool completed)
 
     if (!query.exec())
     {
-        lastError_ = QStringLiteral("업무 목록을 불러오지 못했습니다: %1")
+        lastError_ = QStringLiteral("퀘스트 목록을 불러오지 못했습니다: %1")
                          .arg(query.lastError().text());
         return tasks;
     }
@@ -148,7 +148,7 @@ bool TaskRepository::addTask(
 {
     if (!database_.transaction())
     {
-        setLastDatabaseError(QStringLiteral("업무 저장을 시작하지 못했습니다."));
+        setLastDatabaseError(QStringLiteral("퀘스트 저장을 시작하지 못했습니다."));
         return false;
     }
 
@@ -192,7 +192,7 @@ bool TaskRepository::addTask(
 
     if (!insertQuery.exec())
     {
-        lastError_ = QStringLiteral("업무를 저장하지 못했습니다: %1")
+        lastError_ = QStringLiteral("퀘스트를 저장하지 못했습니다: %1")
                          .arg(insertQuery.lastError().text());
         database_.rollback();
         return false;
@@ -200,7 +200,7 @@ bool TaskRepository::addTask(
 
     if (!database_.commit())
     {
-        setLastDatabaseError(QStringLiteral("업무 저장을 완료하지 못했습니다."));
+        setLastDatabaseError(QStringLiteral("퀘스트 저장을 완료하지 못했습니다."));
         database_.rollback();
         return false;
     }
@@ -251,14 +251,14 @@ bool TaskRepository::updateTask(
 
     if (!query.exec())
     {
-        lastError_ = QStringLiteral("업무 수정을 저장하지 못했습니다: %1")
+        lastError_ = QStringLiteral("퀘스트 수정을 저장하지 못했습니다: %1")
                          .arg(query.lastError().text());
         return false;
     }
 
     if (query.numRowsAffected() != 1)
     {
-        lastError_ = QStringLiteral("수정할 업무를 찾지 못했습니다.");
+        lastError_ = QStringLiteral("수정할 퀘스트를 찾지 못했습니다.");
         return false;
     }
 
@@ -286,7 +286,7 @@ bool TaskRepository::completeTask(qint64 taskId)
 
     if (query.numRowsAffected() != 1)
     {
-        lastError_ = QStringLiteral("완료 처리할 업무를 찾지 못했습니다.");
+        lastError_ = QStringLiteral("완료할 퀘스트를 찾지 못했습니다.");
         return false;
     }
 
@@ -302,14 +302,14 @@ bool TaskRepository::deleteTask(qint64 taskId)
 
     if (!query.exec())
     {
-        lastError_ = QStringLiteral("업무를 삭제하지 못했습니다: %1")
+        lastError_ = QStringLiteral("퀘스트를 삭제하지 못했습니다: %1")
                          .arg(query.lastError().text());
         return false;
     }
 
     if (query.numRowsAffected() != 1)
     {
-        lastError_ = QStringLiteral("삭제할 업무를 찾지 못했습니다.");
+        lastError_ = QStringLiteral("삭제할 퀘스트를 찾지 못했습니다.");
         return false;
     }
 
@@ -331,7 +331,7 @@ bool TaskRepository::titleExists(
 
     if (!query.exec())
     {
-        lastError_ = QStringLiteral("업무 제목 중복 여부를 확인하지 못했습니다: %1")
+        lastError_ = QStringLiteral("퀘스트 제목 중복 여부를 확인하지 못했습니다: %1")
                          .arg(query.lastError().text());
         return true;
     }

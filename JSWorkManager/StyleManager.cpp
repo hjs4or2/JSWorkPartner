@@ -63,7 +63,7 @@ QIcon StyleManager::applicationIcon() const
     painter.setBrush(QColor(QStringLiteral("#2563EB")));
     painter.drawRoundedRect(QRectF(4, 4, 56, 56), 14, 14);
 
-    // 작은 트레이 아이콘에서도 업무 앱임을 알아볼 수 있는 체크리스트입니다.
+    // 작은 트레이 아이콘에서도 퀘스트 앱임을 알아볼 수 있는 체크리스트입니다.
     painter.setBrush(QColor(QStringLiteral("#FFFFFF")));
     painter.drawRoundedRect(QRectF(13, 11, 38, 43), 6, 6);
 

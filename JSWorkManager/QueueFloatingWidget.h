@@ -26,6 +26,10 @@ protected:
     void showEvent(QShowEvent* event) override;
     void closeEvent(QCloseEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    bool nativeEvent(
+        const QByteArray& eventType,
+        void* message,
+        long* result) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:

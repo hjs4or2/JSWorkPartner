@@ -54,30 +54,30 @@ TaskQueueWidget::TaskQueueWidget(
       completedViewModel_(completedViewModel)
 {
     setWindowTitle(
-        QStringLiteral("%1 v%2 - 업무 우선순위 관리자")
+        QStringLiteral("%1 v%2 - 퀘스트 보드")
             .arg(QCoreApplication::applicationName())
             .arg(QCoreApplication::applicationVersion()));
     resize(1120, 760);
     setMinimumSize(900, 620);
 
-    auto* listTitleLabel = new QLabel(QStringLiteral("대기 Queue"), this);
+    auto* listTitleLabel = new QLabel(QStringLiteral("진행 중인 퀘스트"), this);
     QFont titleFont = listTitleLabel->font();
     titleFont.setPointSize(20);
     titleFont.setBold(true);
     listTitleLabel->setFont(titleFont);
 
     auto* queueTabsTitleLabel = new QLabel(
-        QStringLiteral("Queue 전체보기"),
+        QStringLiteral("퀘스트 전체보기"),
         this);
     queueTabsTitleLabel->setFont(titleFont);
 
-    auto* titleInputLabel = new QLabel(QStringLiteral("업무 제목"), this);
+    auto* titleInputLabel = new QLabel(QStringLiteral("퀘스트 제목"), this);
     QFont inputLabelFont = titleInputLabel->font();
     inputLabelFont.setBold(true);
     titleInputLabel->setFont(inputLabelFont);
 
     titleInput_ = new QLineEdit(this);
-    titleInput_->setPlaceholderText(QStringLiteral("업무의 핵심 제목을 입력하세요."));
+    titleInput_->setPlaceholderText(QStringLiteral("퀘스트 제목을 입력하세요."));
     titleInput_->setMinimumHeight(38);
 
     auto* detailsInputLabel = new QLabel(QStringLiteral("상세 설명"), this);
@@ -85,7 +85,7 @@ TaskQueueWidget::TaskQueueWidget(
 
     detailsInput_ = new QTextEdit(this);
     detailsInput_->setPlaceholderText(
-        QStringLiteral("업무의 배경, 요청사항 등 상세 내용을 작성하세요. (선택)"));
+        QStringLiteral("퀘스트의 배경, 요청사항 등 상세 내용을 작성하세요. (선택)"));
     detailsInput_->setFixedHeight(70);
     detailsInput_->setAcceptRichText(false);
 
@@ -138,14 +138,14 @@ TaskQueueWidget::TaskQueueWidget(
     optionsLayout->addWidget(deadlineInput_);
     optionsLayout->addWidget(deadlineClearButton_);
 
-    addButton_ = new QPushButton(QStringLiteral("업무 추가  (Ctrl+Enter)"), this);
+    addButton_ = new QPushButton(QStringLiteral("새 퀘스트  (Ctrl+Enter)"), this);
     addButton_->setObjectName(QStringLiteral("primaryButton"));
     addButton_->setDefault(true);
     addButton_->setMinimumHeight(38);
     addButton_->setToolTip(
         QStringLiteral(
-            "새 업무는 중요도 1, 마감일 X로 저장됩니다.\n"
-            "목록에서 업무를 선택한 뒤 완료 버튼을 누르세요."));
+            "새 퀘스트는 중요도 1, 마감일 X로 저장됩니다.\n"
+            "목록에서 퀘스트를 선택한 뒤 완료 버튼을 누르세요."));
 
     cancelEditButton_ = new QPushButton(QStringLiteral("수정 취소"), this);
     cancelEditButton_->setVisible(false);
@@ -217,14 +217,14 @@ TaskQueueWidget::TaskQueueWidget(
     completedLayout->addWidget(completedTable_);
 
     queueTabs_ = new QTabWidget(this);
-    queueTabs_->addTab(pendingFullPage, QStringLiteral("대기 Queue 전체보기"));
-    queueTabs_->addTab(completedPage, QStringLiteral("완료 Queue"));
+    queueTabs_->addTab(pendingFullPage, QStringLiteral("진행 중인 퀘스트"));
+    queueTabs_->addTab(completedPage, QStringLiteral("완료한 퀘스트"));
     queueTabs_->setCurrentIndex(1);
 
-    completeButton_ = new QPushButton(QStringLiteral("선택한 업무 완료"), this);
+    completeButton_ = new QPushButton(QStringLiteral("선택 퀘스트 완료"), this);
     completeButton_->setObjectName(QStringLiteral("successButton"));
     completeButton_->setFixedSize(132, 34);
-    editButton_ = new QPushButton(QStringLiteral("선택한 업무 수정"), this);
+    editButton_ = new QPushButton(QStringLiteral("선택 퀘스트 수정"), this);
     editButton_->setFixedSize(132, 34);
 
     auto* queueHeaderLayout = new QHBoxLayout();
@@ -234,7 +234,7 @@ TaskQueueWidget::TaskQueueWidget(
     queueHeaderLayout->addWidget(completeButton_);
 
     statusLabel_ = new QLabel(
-        QStringLiteral("업무를 입력해 주세요."),
+        QStringLiteral("퀘스트를 입력해 주세요."),
         this);
     statusLabel_->setWordWrap(true);
 
@@ -255,7 +255,7 @@ TaskQueueWidget::TaskQueueWidget(
     selectedDisplayLayout->setSpacing(8);
 
     selectedTitleLabel_ = new QLabel(
-        QStringLiteral("오른쪽 목록에서 업무를 선택하세요."),
+        QStringLiteral("오른쪽 목록에서 퀘스트를 선택하세요."),
         selectedDisplayWidget_);
     QFont selectedTitleFont = selectedTitleLabel_->font();
     selectedTitleFont.setPointSize(12);
@@ -324,8 +324,8 @@ TaskQueueWidget::TaskQueueWidget(
 
     workTabs_ = new QTabWidget(this);
     workTabs_->setMinimumHeight(360);
-    workTabs_->addTab(newTaskHost_, QStringLiteral("새 업무 작성"));
-    workTabs_->addTab(selectedTaskPage, QStringLiteral("선택 업무 상세"));
+    workTabs_->addTab(newTaskHost_, QStringLiteral("새 퀘스트"));
+    workTabs_->addTab(selectedTaskPage, QStringLiteral("선택 퀘스트 상세"));
     workTabs_->setCurrentIndex(0);
 
     auto* leftPanel = new QWidget(this);
@@ -524,7 +524,7 @@ void TaskQueueWidget::setupTrayIcon()
     auto* trayMenu = new QMenu(this);
     QAction* showAction = trayMenu->addAction(QStringLiteral("창 열기"));
     floatingQueueAction_ =
-        trayMenu->addAction(QStringLiteral("대기 Queue 위젯 표시"));
+        trayMenu->addAction(QStringLiteral("퀘스트 보드 표시"));
     floatingQueueAction_->setCheckable(true);
     QAction* settingsAction =
         trayMenu->addAction(QStringLiteral("Settings..."));
@@ -721,7 +721,7 @@ void TaskQueueWidget::showTrayHint()
     trayIcon_->showMessage(
         QStringLiteral("트레이에서 실행 중"),
         QStringLiteral(
-            "트레이 아이콘을 클릭하면 업무 관리 창을 다시 열 수 있습니다."),
+            "트레이 아이콘을 클릭하면 퀘스트 보드를 다시 열 수 있습니다."),
         QSystemTrayIcon::Information,
         3000);
 }
@@ -770,7 +770,7 @@ void TaskQueueWidget::addTask()
     deadlineClearButton_->setVisible(false);
     editingRow_ = -1;
     editingViewModel_ = nullptr;
-    addButton_->setText(QStringLiteral("업무 추가  (Ctrl+Enter)"));
+    addButton_->setText(QStringLiteral("새 퀘스트  (Ctrl+Enter)"));
     cancelEditButton_->setVisible(false);
     statusLabel_->setText(savedViewModel->lastMessage());
     if (wasEditing)
@@ -828,7 +828,7 @@ void TaskQueueWidget::startEditing()
     cancelEditButton_->setVisible(true);
     setEditingUi(true);
     statusLabel_->setText(
-        QStringLiteral("%1번 업무를 수정 중입니다.").arg(task.sequence));
+        QStringLiteral("%1번 퀘스트를 수정 중입니다.").arg(task.sequence));
     titleInput_->setFocus();
     titleInput_->selectAll();
 }
@@ -844,12 +844,12 @@ void TaskQueueWidget::cancelEditing()
     setImportance(1);
     deadlineInput_->clearDate();
     deadlineClearButton_->setVisible(false);
-    addButton_->setText(QStringLiteral("업무 추가  (Ctrl+Enter)"));
+    addButton_->setText(QStringLiteral("새 퀘스트  (Ctrl+Enter)"));
     cancelEditButton_->setVisible(false);
     setEditingUi(false);
     if (wasEditing)
     {
-        statusLabel_->setText(QStringLiteral("업무 수정을 취소했습니다."));
+        statusLabel_->setText(QStringLiteral("퀘스트 수정을 취소했습니다."));
         workTabs_->setCurrentIndex(1);
     }
     else
@@ -892,10 +892,10 @@ void TaskQueueWidget::deleteSelectedTask()
 
     const QMessageBox::StandardButton answer = QMessageBox::warning(
         this,
-        QStringLiteral("업무 삭제 확인"),
+        QStringLiteral("퀘스트 삭제 확인"),
         QStringLiteral(
-            "'%1' 업무를 삭제하시겠습니까?\n"
-            "삭제한 업무는 복구할 수 없습니다.")
+            "'%1' 퀘스트를 삭제하시겠습니까?\n"
+            "삭제한 퀘스트는 복구할 수 없습니다.")
             .arg(task.title),
         QMessageBox::Yes | QMessageBox::No,
         QMessageBox::No);
@@ -1060,7 +1060,7 @@ void TaskQueueWidget::setEditingUi(bool editing)
         selectedDisplayWidget_->setVisible(false);
         selectedEditHost_->setVisible(true);
         workTabs_->setTabEnabled(0, false);
-        workTabs_->setTabText(1, QStringLiteral("선택 업무 수정"));
+        workTabs_->setTabText(1, QStringLiteral("선택 퀘스트 수정"));
         workTabs_->setCurrentIndex(1);
         return;
     }
@@ -1070,7 +1070,7 @@ void TaskQueueWidget::setEditingUi(bool editing)
     selectedEditHost_->setVisible(false);
     selectedDisplayWidget_->setVisible(true);
     workTabs_->setTabEnabled(0, true);
-    workTabs_->setTabText(1, QStringLiteral("선택 업무 상세"));
+    workTabs_->setTabText(1, QStringLiteral("선택 퀘스트 상세"));
 }
 
 Task TaskQueueWidget::selectedTask() const
@@ -1107,7 +1107,7 @@ void TaskQueueWidget::updateSelectedTaskDetails()
         !selectedTable_->selectionModel()->hasSelection())
     {
         selectedTitleLabel_->setText(
-            QStringLiteral("오른쪽 목록에서 업무를 선택하세요."));
+            QStringLiteral("오른쪽 목록에서 퀘스트를 선택하세요."));
         selectedDetailsLabel_->setText(QStringLiteral("-"));
         selectedMetaLabel_->setText(QStringLiteral("-"));
         selectedExternalUrl_.clear();
@@ -1120,7 +1120,7 @@ void TaskQueueWidget::updateSelectedTaskDetails()
     if (task.id == 0)
     {
         selectedTitleLabel_->setText(
-            QStringLiteral("오른쪽 목록에서 업무를 선택하세요."));
+            QStringLiteral("오른쪽 목록에서 퀘스트를 선택하세요."));
         selectedDetailsLabel_->setText(QStringLiteral("-"));
         selectedMetaLabel_->setText(QStringLiteral("-"));
         selectedExternalUrl_.clear();
@@ -1198,16 +1198,16 @@ void TaskQueueWidget::updateUiState()
 {
     queueCountLabel_->setText(
         QStringLiteral(
-            "대기 중인 업무: %1개  ·  위에서 5개를 우선 표시합니다.")
+            "진행 중인 퀘스트: %1개  ·  위에서 5개를 우선 표시합니다.")
             .arg(pendingViewModel_.taskCount()));
 
     queueTabs_->setTabText(
         0,
-        QStringLiteral("대기 Queue 전체보기 (%1)")
+        QStringLiteral("진행 중인 퀘스트 (%1)")
             .arg(pendingViewModel_.taskCount()));
     queueTabs_->setTabText(
         1,
-        QStringLiteral("완료 Queue (%1)")
+        QStringLiteral("완료한 퀘스트 (%1)")
             .arg(completedViewModel_.taskCount()));
 
     const QDate today = QDate::currentDate();
@@ -1358,19 +1358,19 @@ QString TaskQueueWidget::summaryText(
     };
 
     return QStringLiteral(
-        "업무 요약 (%1 ~ %2)\n\n%3\n\n%4\n\n%5\n\n%6")
+        "퀘스트 요약 (%1 ~ %2)\n\n%3\n\n%4\n\n%5\n\n%6")
         .arg(rangeStart.toString(QStringLiteral("yyyy.MM.dd")))
         .arg(rangeEnd.toString(QStringLiteral("yyyy.MM.dd")))
         .arg(sectionText(QStringLiteral("[접수]"), received))
         .arg(sectionText(QStringLiteral("[마감]"), due))
-        .arg(sectionText(QStringLiteral("[지연 업무]"), overdue))
+        .arg(sectionText(QStringLiteral("[지연 퀘스트]"), overdue))
         .arg(sectionText(QStringLiteral("[완료]"), completed));
 }
 
 void TaskQueueWidget::showWeeklySummaryList()
 {
     QDialog dialog(this);
-    dialog.setWindowTitle(QStringLiteral("업무 요약"));
+    dialog.setWindowTitle(QStringLiteral("퀘스트 요약"));
     dialog.resize(680, 600);
 
     const QDate today = QDate::currentDate();
@@ -1514,7 +1514,7 @@ void TaskQueueWidget::showViewModelError()
 {
     QMessageBox::warning(
         this,
-        QStringLiteral("업무 처리 실패"),
+        QStringLiteral("퀘스트 처리 실패"),
         !pendingViewModel_.lastError().isEmpty()
             ? pendingViewModel_.lastError()
             : completedViewModel_.lastError());

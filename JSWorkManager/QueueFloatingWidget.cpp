@@ -20,6 +20,10 @@
 #include <QtWidgets/QToolButton>
 #include <QtWidgets/QVBoxLayout>
 
+#ifdef Q_OS_WIN
+#include <Windows.h>
+#endif
+
 #include "TaskQueueViewModel.h"
 
 namespace
@@ -89,7 +93,7 @@ QueueFloatingWidget::QueueFloatingWidget(
       viewModel_(viewModel)
 {
     setObjectName(QStringLiteral("floatingQueueWidget"));
-    setWindowTitle(QStringLiteral("대기 Queue 위젯"));
+    setWindowTitle(QStringLiteral("퀘스트 보드"));
     setAttribute(Qt::WA_QuitOnClose, false);
     setAttribute(Qt::WA_TranslucentBackground, true);
     resize(640, 305);
@@ -107,7 +111,7 @@ QueueFloatingWidget::QueueFloatingWidget(
     dragHandle_->setObjectName(QStringLiteral("floatingQueueHeader"));
     dragHandle_->installEventFilter(this);
 
-    auto* titleLabel = new QLabel(QStringLiteral("대기 Queue"), dragHandle_);
+    auto* titleLabel = new QLabel(QStringLiteral("퀘스트 보드"), dragHandle_);
     titleLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
     QFont titleFont = titleLabel->font();
     titleFont.setPointSize(12);
@@ -154,10 +158,10 @@ QueueFloatingWidget::QueueFloatingWidget(
         TaskQueueViewModel::DeadlineColumn,
         QHeaderView::ResizeToContents);
 
-    auto* addButton = new QPushButton(QStringLiteral("업무 추가"), card);
+    auto* addButton = new QPushButton(QStringLiteral("새 퀘스트"), card);
     addButton->setObjectName(QStringLiteral("primaryButton"));
     auto* completeButton =
-        new QPushButton(QStringLiteral("선택 업무 완료"), card);
+        new QPushButton(QStringLiteral("선택 퀘스트 완료"), card);
     completeButton->setObjectName(QStringLiteral("successButton"));
     completeButton->setEnabled(false);
 
@@ -298,6 +302,87 @@ void QueueFloatingWidget::resizeEvent(QResizeEvent* event)
         sizeGrip_->move(width() - sizeGrip_->width(), height() - 24);
         sizeGrip_->raise();
     }
+}
+
+bool QueueFloatingWidget::nativeEvent(
+    const QByteArray& eventType,
+    void* message,
+    long* result)
+{
+#ifdef Q_OS_WIN
+    Q_UNUSED(eventType);
+
+    MSG* nativeMessage = static_cast<MSG*>(message);
+    if (nativeMessage != nullptr &&
+        nativeMessage->message == WM_NCHITTEST &&
+        !isMaximized())
+    {
+        RECT windowRect;
+        POINT cursorPosition;
+        if (GetWindowRect(
+                reinterpret_cast<HWND>(winId()),
+                &windowRect) &&
+            GetCursorPos(&cursorPosition))
+        {
+            constexpr LONG resizeBorder = 10;
+            const bool left =
+                cursorPosition.x < windowRect.left + resizeBorder;
+            const bool right =
+                cursorPosition.x >= windowRect.right - resizeBorder;
+            const bool top =
+                cursorPosition.y < windowRect.top + resizeBorder;
+            const bool bottom =
+                cursorPosition.y >= windowRect.bottom - resizeBorder;
+
+            if (top && left)
+            {
+                *result = HTTOPLEFT;
+                return true;
+            }
+            if (top && right)
+            {
+                *result = HTTOPRIGHT;
+                return true;
+            }
+            if (bottom && left)
+            {
+                *result = HTBOTTOMLEFT;
+                return true;
+            }
+            if (bottom && right)
+            {
+                *result = HTBOTTOMRIGHT;
+                return true;
+            }
+            if (left)
+            {
+                *result = HTLEFT;
+                return true;
+            }
+            if (right)
+            {
+                *result = HTRIGHT;
+                return true;
+            }
+            if (top)
+            {
+                *result = HTTOP;
+                return true;
+            }
+            if (bottom)
+            {
+                *result = HTBOTTOM;
+                return true;
+            }
+        }
+    }
+#else
+    Q_UNUSED(eventType);
+    Q_UNUSED(message);
+    Q_UNUSED(result);
+#endif
+
+    return QWidget::nativeEvent(eventType, message, result);
 }
 
 bool QueueFloatingWidget::eventFilter(QObject* watched, QEvent* event)

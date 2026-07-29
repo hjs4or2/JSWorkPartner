@@ -1,5 +1,6 @@
 #include "TaskQueueWidget.h"
 
+#include "DeadlineColorDelegate.h"
 #include "NullableDateEdit.h"
 #include "QueueFloatingWidget.h"
 
@@ -32,6 +33,7 @@
 #include <QtWidgets/QPushButton>
 #include <QtWidgets/QPlainTextEdit>
 #include <QtWidgets/QShortcut>
+#include <QtWidgets/QSlider>
 #include <QtWidgets/QSplitter>
 #include <QtWidgets/QStyle>
 #include <QtWidgets/QTableView>
@@ -165,6 +167,9 @@ TaskQueueWidget::TaskQueueWidget(
         completedTable_}};
     for (QTableView* table : tables)
     {
+        table->setItemDelegateForColumn(
+            TaskQueueViewModel::DeadlineColumn,
+            new DeadlineColorDelegate(table));
         table->setEditTriggers(QAbstractItemView::NoEditTriggers);
         table->setSelectionBehavior(QAbstractItemView::SelectRows);
         table->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -237,12 +242,7 @@ TaskQueueWidget::TaskQueueWidget(
         QStringLiteral("퀘스트를 입력해 주세요."),
         this);
     statusLabel_->setWordWrap(true);
-
-    auto* databasePathLabel = new QLabel(
-        QStringLiteral("저장 DB: %1").arg(pendingViewModel_.databasePath()),
-        this);
-    databasePathLabel->setWordWrap(true);
-    databasePathLabel->setToolTip(pendingViewModel_.databasePath());
+    statusLabel_->setTextInteractionFlags(Qt::TextSelectableByMouse);
 
     auto* selectedTaskPage = new QWidget(this);
     auto* selectedTaskLayout = new QVBoxLayout(selectedTaskPage);
@@ -325,7 +325,7 @@ TaskQueueWidget::TaskQueueWidget(
     workTabs_ = new QTabWidget(this);
     workTabs_->setMinimumHeight(360);
     workTabs_->addTab(newTaskHost_, QStringLiteral("새 퀘스트"));
-    workTabs_->addTab(selectedTaskPage, QStringLiteral("선택 퀘스트 상세"));
+    workTabs_->addTab(selectedTaskPage, QStringLiteral("퀘스트 상세"));
     workTabs_->setCurrentIndex(0);
 
     auto* leftPanel = new QWidget(this);
@@ -343,7 +343,6 @@ TaskQueueWidget::TaskQueueWidget(
     pendingQueueGroupLayout->addLayout(queueHeaderLayout);
     pendingQueueGroupLayout->addWidget(queueCountLabel_);
     pendingQueueGroupLayout->addWidget(pendingPreviewTable_);
-    pendingQueueGroupLayout->addWidget(statusLabel_);
     leftLayout->addWidget(pendingQueueGroup);
 
     auto* rightPanel = new QWidget(this);
@@ -380,7 +379,7 @@ TaskQueueWidget::TaskQueueWidget(
     rightLayout->addWidget(weeklySummaryCard);
     rightLayout->addWidget(queueTabsTitleLabel);
     rightLayout->addWidget(queueTabs_, 1);
-    rightLayout->addWidget(databasePathLabel);
+    rightLayout->addWidget(statusLabel_);
 
     auto* splitter = new QSplitter(Qt::Horizontal, this);
     splitter->addWidget(leftPanel);
@@ -483,6 +482,24 @@ TaskQueueWidget::~TaskQueueWidget()
     }
 }
 
+void TaskQueueWidget::showInitialView()
+{
+    if (floatingQueueWidget_ == nullptr)
+    {
+        show();
+        return;
+    }
+
+    if (floatingQueueAction_ != nullptr)
+    {
+        floatingQueueAction_->setChecked(true);
+    }
+    floatingQueueWidget_->showNormal();
+    floatingQueueWidget_->show();
+    floatingQueueWidget_->raise();
+    floatingQueueWidget_->activateWindow();
+}
+
 void TaskQueueWidget::closeEvent(QCloseEvent* event)
 {
     if (trayIcon_ != nullptr && trayIcon_->isVisible())
@@ -548,6 +565,15 @@ void TaskQueueWidget::setupTrayIcon()
 
     floatingQueueWidget_ = new QueueFloatingWidget(pendingViewModel_);
     QSettings settings;
+    const int savedOpacity =
+        qBound(
+            20,
+            settings.value(
+                        QStringLiteral("floatingQueue/opacity"),
+                        100)
+                .toInt(),
+            100);
+    floatingQueueWidget_->setWindowOpacity(savedOpacity / 100.0);
     const QByteArray savedGeometry =
         settings.value(QStringLiteral("floatingQueue/geometry")).toByteArray();
     if (!savedGeometry.isEmpty())
@@ -631,6 +657,15 @@ void TaskQueueWidget::showSettingsDialog()
 {
     const StyleManager::Theme originalTheme =
         StyleManager::instance().currentTheme();
+    QSettings settings;
+    const int originalOpacity =
+        qBound(
+            20,
+            settings.value(
+                        QStringLiteral("floatingQueue/opacity"),
+                        100)
+                .toInt(),
+            100);
 
     QDialog dialog(this);
     dialog.setWindowTitle(QStringLiteral("Settings"));
@@ -664,6 +699,45 @@ void TaskQueueWidget::showSettingsDialog()
     themeLayout->addStretch();
     themeLayout->addWidget(themeCombo);
 
+    auto* dataPathLabel =
+        new QLabel(QStringLiteral("데이터 저장 위치"), &dialog);
+    QFont dataPathLabelFont = dataPathLabel->font();
+    dataPathLabelFont.setBold(true);
+    dataPathLabel->setFont(dataPathLabelFont);
+
+    auto* databasePathEdit = new QLineEdit(&dialog);
+    databasePathEdit->setReadOnly(true);
+    databasePathEdit->setText(pendingViewModel_.databasePath());
+    databasePathEdit->setToolTip(pendingViewModel_.databasePath());
+    databasePathEdit->setCursorPosition(0);
+
+    auto* boardSettingsLabel =
+        new QLabel(QStringLiteral("퀘스트 보드 설정"), &dialog);
+    QFont boardSettingsLabelFont = boardSettingsLabel->font();
+    boardSettingsLabelFont.setBold(true);
+    boardSettingsLabel->setFont(boardSettingsLabelFont);
+
+    auto* opacityTitleLabel = new QLabel(QStringLiteral("투명도"), &dialog);
+    auto* opacitySlider = new QSlider(Qt::Horizontal, &dialog);
+    opacitySlider->setRange(20, 100);
+    opacitySlider->setSingleStep(5);
+    opacitySlider->setPageStep(10);
+    opacitySlider->setValue(originalOpacity);
+    opacitySlider->setToolTip(
+        QStringLiteral("퀘스트 보드 투명도 (20% ~ 100%)"));
+    auto* opacityValueLabel = new QLabel(
+        QStringLiteral("%1%").arg(originalOpacity),
+        &dialog);
+    opacityValueLabel->setFixedWidth(48);
+    opacityValueLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+
+    auto* opacityLayout = new QHBoxLayout();
+    opacityLayout->setContentsMargins(0, 0, 0, 0);
+    opacityLayout->setSpacing(10);
+    opacityLayout->addWidget(opacityTitleLabel);
+    opacityLayout->addWidget(opacitySlider, 1);
+    opacityLayout->addWidget(opacityValueLabel);
+
     auto* saveButton = new QPushButton(QStringLiteral("저장"), &dialog);
     saveButton->setObjectName(QStringLiteral("primaryButton"));
     auto* cancelButton = new QPushButton(QStringLiteral("취소"), &dialog);
@@ -680,6 +754,12 @@ void TaskQueueWidget::showSettingsDialog()
     layout->addSpacing(8);
     layout->addLayout(themeLayout);
     layout->addSpacing(12);
+    layout->addWidget(boardSettingsLabel);
+    layout->addLayout(opacityLayout);
+    layout->addSpacing(12);
+    layout->addWidget(dataPathLabel);
+    layout->addWidget(databasePathEdit);
+    layout->addSpacing(12);
     layout->addLayout(actionLayout);
 
     connect(
@@ -692,7 +772,29 @@ void TaskQueueWidget::showSettingsDialog()
                     themeCombo->itemData(index).toInt());
             StyleManager::instance().setTheme(*qApp, theme);
         });
-    connect(saveButton, &QPushButton::clicked, &dialog, &QDialog::accept);
+    connect(
+        opacitySlider,
+        &QSlider::valueChanged,
+        &dialog,
+        [this, opacityValueLabel](int opacity) {
+            opacityValueLabel->setText(
+                QStringLiteral("%1%").arg(opacity));
+            if (floatingQueueWidget_ != nullptr)
+            {
+                floatingQueueWidget_->setWindowOpacity(opacity / 100.0);
+            }
+        });
+    connect(
+        saveButton,
+        &QPushButton::clicked,
+        &dialog,
+        [&dialog, opacitySlider]() {
+            QSettings settings;
+            settings.setValue(
+                QStringLiteral("floatingQueue/opacity"),
+                opacitySlider->value());
+            dialog.accept();
+        });
     connect(cancelButton, &QPushButton::clicked, &dialog, [&dialog]() {
         dialog.reject();
     });
@@ -700,6 +802,11 @@ void TaskQueueWidget::showSettingsDialog()
     if (dialog.exec() != QDialog::Accepted)
     {
         StyleManager::instance().setTheme(*qApp, originalTheme);
+        if (floatingQueueWidget_ != nullptr)
+        {
+            floatingQueueWidget_->setWindowOpacity(
+                originalOpacity / 100.0);
+        }
     }
 }
 
@@ -1070,7 +1177,7 @@ void TaskQueueWidget::setEditingUi(bool editing)
     selectedEditHost_->setVisible(false);
     selectedDisplayWidget_->setVisible(true);
     workTabs_->setTabEnabled(0, true);
-    workTabs_->setTabText(1, QStringLiteral("선택 퀘스트 상세"));
+    workTabs_->setTabText(1, QStringLiteral("퀘스트 상세"));
 }
 
 Task TaskQueueWidget::selectedTask() const
@@ -1266,7 +1373,7 @@ void TaskQueueWidget::updateUiState()
 
     weeklySummaryLabel_->setText(
         QStringLiteral(
-            "%1 ~ %2  ·  접수 %3  ·  마감 %4  ·  완료 %5  ·  지연 %6")
+            "%1 ~ %2  ·  접수 %3  ·  마감 예정 %4  ·  완료 %5  ·  지연 %6")
             .arg(weekStart.toString(QStringLiteral("MM.dd")))
             .arg(weekEnd.toString(QStringLiteral("MM.dd")))
             .arg(receivedThisWeek)
@@ -1320,10 +1427,15 @@ QString TaskQueueWidget::summaryText(
         }
         else
         {
+            const int daysRemaining = today.daysTo(deadline);
+            const QString countdown =
+                daysRemaining == 0
+                    ? QStringLiteral("D-DAY")
+                    : QStringLiteral("D-%1").arg(daysRemaining);
             due.append(
                 QStringLiteral("- %1 (%2)")
                     .arg(task.title)
-                    .arg(deadline.toString(QStringLiteral("MM.dd"))));
+                    .arg(countdown));
         }
     }
 
@@ -1362,7 +1474,7 @@ QString TaskQueueWidget::summaryText(
         .arg(rangeStart.toString(QStringLiteral("yyyy.MM.dd")))
         .arg(rangeEnd.toString(QStringLiteral("yyyy.MM.dd")))
         .arg(sectionText(QStringLiteral("[접수]"), received))
-        .arg(sectionText(QStringLiteral("[마감]"), due))
+        .arg(sectionText(QStringLiteral("[마감 예정]"), due))
         .arg(sectionText(QStringLiteral("[지연 퀘스트]"), overdue))
         .arg(sectionText(QStringLiteral("[완료]"), completed));
 }

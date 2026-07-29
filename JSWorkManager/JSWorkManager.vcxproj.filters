@@ -46,6 +46,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="DeadlineColorDelegate.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="NullableDateEdit.h">
       <Filter>Header Files</Filter>
     </ClInclude>

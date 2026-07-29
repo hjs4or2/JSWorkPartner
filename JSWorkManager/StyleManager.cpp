@@ -142,6 +142,21 @@ QString StyleManager::styleSheet(Theme theme) const
             padding: 0;
         }
 
+        QToolButton#floatingQueueMinimizeButton {
+            background-color: transparent;
+            border: none;
+            border-radius: 6px;
+            padding: 0;
+        }
+
+        QToolButton#floatingQueueMinimizeButton:hover {
+            background-color: #DBEAFE;
+        }
+
+        QToolButton#floatingQueueMinimizeButton:pressed {
+            background-color: #BFDBFE;
+        }
+
         QToolButton#floatingQueueCloseButton:hover {
             background-color: #FEE2E2;
         }
@@ -293,6 +308,25 @@ QString StyleManager::styleSheet(Theme theme) const
 
         QToolButton:pressed {
             background-color: #DBEAFE;
+        }
+
+        QSlider::groove:horizontal {
+            background-color: #D5DEEA;
+            height: 6px;
+            border-radius: 3px;
+        }
+
+        QSlider::sub-page:horizontal {
+            background-color: #3B82F6;
+            border-radius: 3px;
+        }
+
+        QSlider::handle:horizontal {
+            background-color: #2563EB;
+            border: 2px solid #FFFFFF;
+            width: 16px;
+            margin: -6px 0;
+            border-radius: 9px;
         }
 
         QMenu {
@@ -466,6 +500,22 @@ QString StyleManager::styleSheet(Theme theme) const
                 background-color: #263449;
                 color: #93C5FD;
                 border-color: #64748B;
+            }
+
+            QToolButton#floatingQueueMinimizeButton:hover {
+                background-color: #263449;
+            }
+
+            QToolButton#floatingQueueMinimizeButton:pressed {
+                background-color: #1E3A5F;
+            }
+
+            QSlider::groove:horizontal {
+                background-color: #334155;
+            }
+
+            QSlider::handle:horizontal {
+                border-color: #182235;
             }
 
             QMenu {

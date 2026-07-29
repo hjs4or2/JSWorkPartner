@@ -105,6 +105,7 @@
     <ClCompile Include="TaskRepository.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="DeadlineColorDelegate.h" />
     <ClInclude Include="NullableDateEdit.h" />
     <ClInclude Include="QueueFloatingWidget.h" />
     <ClInclude Include="StyleManager.h" />

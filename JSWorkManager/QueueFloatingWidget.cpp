@@ -1,5 +1,7 @@
 #include "QueueFloatingWidget.h"
 
+#include "DeadlineColorDelegate.h"
+
 #include <QtCore/QItemSelectionModel>
 #include <QtCore/QSortFilterProxyModel>
 #include <QtGui/QCloseEvent>
@@ -80,6 +82,58 @@ protected:
             center + QPointF(-radius, radius));
     }
 };
+
+class CenteredMinimizeButton final : public QToolButton
+{
+public:
+    explicit CenteredMinimizeButton(QWidget* parent = nullptr)
+        : QToolButton(parent)
+    {
+    }
+
+    void setRestoreMode(bool restoreMode)
+    {
+        restoreMode_ = restoreMode;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent* event) override
+    {
+        QToolButton::paintEvent(event);
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        const QColor color =
+            isDown()
+                ? QColor(QStringLiteral("#1D4ED8"))
+                : underMouse()
+                      ? QColor(QStringLiteral("#2563EB"))
+                      : QColor(QStringLiteral("#64748B"));
+        QPen pen(color, 2.0);
+        pen.setCapStyle(Qt::RoundCap);
+        painter.setPen(pen);
+
+        const QPointF center = rect().center();
+        if (restoreMode_)
+        {
+            painter.setBrush(Qt::NoBrush);
+            painter.drawRoundedRect(
+                QRectF(center.x() - 4.5, center.y() - 3.5, 9.0, 7.0),
+                1.5,
+                1.5);
+        }
+        else
+        {
+            painter.drawLine(
+                center + QPointF(-5.0, 2.5),
+                center + QPointF(5.0, 2.5));
+        }
+    }
+
+private:
+    bool restoreMode_ = false;
+};
 }
 
 QueueFloatingWidget::QueueFloatingWidget(
@@ -123,11 +177,18 @@ QueueFloatingWidget::QueueFloatingWidget(
     closeButton->setToolTip(QStringLiteral("위젯 숨기기"));
     closeButton->setFixedSize(28, 28);
 
+    auto* minimizeButton = new CenteredMinimizeButton(dragHandle_);
+    minimizeButton->setObjectName(
+        QStringLiteral("floatingQueueMinimizeButton"));
+    minimizeButton->setToolTip(QStringLiteral("접기"));
+    minimizeButton->setFixedSize(28, 28);
+
     auto* headerLayout = new QHBoxLayout(dragHandle_);
     headerLayout->setContentsMargins(0, 0, 0, 0);
     headerLayout->setSpacing(8);
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch();
+    headerLayout->addWidget(minimizeButton);
     headerLayout->addWidget(closeButton);
 
     auto* proxyModel = new FirstFiveTasksProxyModel(this);
@@ -135,6 +196,9 @@ QueueFloatingWidget::QueueFloatingWidget(
 
     table_ = new QTableView(this);
     table_->setModel(proxyModel);
+    table_->setItemDelegateForColumn(
+        TaskQueueViewModel::DeadlineColumn,
+        new DeadlineColorDelegate(table_));
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -172,12 +236,18 @@ QueueFloatingWidget::QueueFloatingWidget(
     actionLayout->addStretch();
     actionLayout->addWidget(completeButton);
 
+    auto* contentHost = new QWidget(card);
+    auto* contentLayout = new QVBoxLayout(contentHost);
+    contentLayout->setContentsMargins(0, 0, 0, 0);
+    contentLayout->setSpacing(8);
+    contentLayout->addWidget(table_, 1);
+    contentLayout->addLayout(actionLayout);
+
     auto* cardLayout = new QVBoxLayout(card);
     cardLayout->setContentsMargins(14, 12, 14, 12);
     cardLayout->setSpacing(8);
     cardLayout->addWidget(dragHandle_);
-    cardLayout->addWidget(table_, 1);
-    cardLayout->addLayout(actionLayout);
+    cardLayout->addWidget(contentHost, 1);
 
     auto* outerLayout = new QVBoxLayout(this);
     outerLayout->setContentsMargins(12, 8, 12, 16);
@@ -189,6 +259,40 @@ QueueFloatingWidget::QueueFloatingWidget(
     sizeGrip_->raise();
 
     connect(closeButton, &QToolButton::clicked, this, &QWidget::close);
+    connect(
+        minimizeButton,
+        &QToolButton::clicked,
+        this,
+        [this,
+         contentHost,
+         minimizeButton,
+         expandedSize = QSize()]() mutable {
+            const bool collapsing = contentHost->isVisible();
+            if (collapsing)
+            {
+                expandedSize = size();
+                contentHost->hide();
+                sizeGrip_->hide();
+                setMinimumSize(280, 76);
+                setMaximumHeight(76);
+                resize(width(), 76);
+                minimizeButton->setRestoreMode(true);
+                minimizeButton->setToolTip(QStringLiteral("펼치기"));
+            }
+            else
+            {
+                setMaximumHeight(QWIDGETSIZE_MAX);
+                setMinimumSize(480, 270);
+                contentHost->show();
+                sizeGrip_->show();
+                resize(
+                    expandedSize.isValid()
+                        ? expandedSize
+                        : QSize(640, 305));
+                minimizeButton->setRestoreMode(false);
+                minimizeButton->setToolTip(QStringLiteral("접기"));
+            }
+        });
     connect(addButton, &QPushButton::clicked, this, [this]() {
         if (addTaskHandler_)
         {

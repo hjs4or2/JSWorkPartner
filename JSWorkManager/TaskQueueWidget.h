@@ -30,6 +30,7 @@ public:
         TaskQueueViewModel& completedViewModel,
         QWidget* parent = nullptr);
     ~TaskQueueWidget() override;
+    void showInitialView();
 
 protected:
     void closeEvent(QCloseEvent* event) override;

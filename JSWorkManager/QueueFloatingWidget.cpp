@@ -11,6 +11,8 @@
 #include <QtGui/QShowEvent>
 #include <QtWidgets/QAction>
 #include <QtWidgets/QAbstractItemView>
+#include <QtWidgets/QApplication>
+#include <QtWidgets/QDesktopWidget>
 #include <QtWidgets/QGraphicsDropShadowEffect>
 #include <QtWidgets/QHeaderView>
 #include <QtWidgets/QHBoxLayout>
@@ -273,22 +275,52 @@ QueueFloatingWidget::QueueFloatingWidget(
                 expandedSize = size();
                 contentHost->hide();
                 sizeGrip_->hide();
-                setMinimumSize(280, 76);
-                setMaximumHeight(76);
-                resize(width(), 76);
+                setMinimumSize(240, 76);
+                setMaximumSize(240, 76);
+                resize(240, 76);
                 minimizeButton->setRestoreMode(true);
                 minimizeButton->setToolTip(QStringLiteral("펼치기"));
             }
             else
             {
-                setMaximumHeight(QWIDGETSIZE_MAX);
+                setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
                 setMinimumSize(480, 270);
                 contentHost->show();
                 sizeGrip_->show();
-                resize(
+                const QSize restoredSize =
                     expandedSize.isValid()
                         ? expandedSize
-                        : QSize(640, 305));
+                        : QSize(640, 305);
+                const QRect availableGeometry =
+                    QApplication::desktop()->availableGeometry(this);
+                QPoint restoredPosition = pos();
+                if (restoredPosition.x() + restoredSize.width() >
+                    availableGeometry.right() + 1)
+                {
+                    restoredPosition.setX(
+                        availableGeometry.right() -
+                        restoredSize.width() +
+                        1);
+                }
+                if (restoredPosition.x() < availableGeometry.left())
+                {
+                    restoredPosition.setX(availableGeometry.left());
+                }
+                if (restoredPosition.y() + restoredSize.height() >
+                    availableGeometry.bottom() + 1)
+                {
+                    restoredPosition.setY(
+                        availableGeometry.bottom() -
+                        restoredSize.height() +
+                        1);
+                }
+                if (restoredPosition.y() < availableGeometry.top())
+                {
+                    restoredPosition.setY(availableGeometry.top());
+                }
+
+                resize(restoredSize);
+                move(restoredPosition);
                 minimizeButton->setRestoreMode(false);
                 minimizeButton->setToolTip(QStringLiteral("접기"));
             }

@@ -1,5 +1,8 @@
 #include "TaskQueueWidget.h"
 
+#include <functional>
+#include <utility>
+
 #include "DeadlineColorDelegate.h"
 #include "NullableDateEdit.h"
 #include "QueueFloatingWidget.h"
@@ -46,6 +49,62 @@
 #include "StyleManager.h"
 #include "TaskQueueViewModel.h"
 #include "Task.h"
+
+namespace
+{
+class SettingsDialog final : public QDialog
+{
+public:
+    enum class CloseDecision
+    {
+        Save,
+        Discard,
+        Cancel
+    };
+
+    explicit SettingsDialog(QWidget* parent = nullptr)
+        : QDialog(parent)
+    {
+    }
+
+    void setCloseDecisionHandler(
+        std::function<CloseDecision()> handler)
+    {
+        closeDecisionHandler_ = std::move(handler);
+    }
+
+protected:
+    void closeEvent(QCloseEvent* event) override
+    {
+        if (!closeDecisionHandler_)
+        {
+            QDialog::closeEvent(event);
+            return;
+        }
+
+        const CloseDecision decision = closeDecisionHandler_();
+        switch (decision)
+        {
+        case CloseDecision::Save:
+            closeDecisionHandler_ = nullptr;
+            event->ignore();
+            accept();
+            break;
+        case CloseDecision::Discard:
+            closeDecisionHandler_ = nullptr;
+            event->ignore();
+            reject();
+            break;
+        case CloseDecision::Cancel:
+            event->ignore();
+            break;
+        }
+    }
+
+private:
+    std::function<CloseDecision()> closeDecisionHandler_;
+};
+}
 
 TaskQueueWidget::TaskQueueWidget(
     TaskQueueViewModel& pendingViewModel,
@@ -667,7 +726,7 @@ void TaskQueueWidget::showSettingsDialog()
                 .toInt(),
             100);
 
-    QDialog dialog(this);
+    SettingsDialog dialog(this);
     dialog.setWindowTitle(QStringLiteral("Settings"));
     dialog.setMinimumWidth(420);
 
@@ -784,20 +843,63 @@ void TaskQueueWidget::showSettingsDialog()
                 floatingQueueWidget_->setWindowOpacity(opacity / 100.0);
             }
         });
-    connect(
-        saveButton,
-        &QPushButton::clicked,
-        &dialog,
-        [&dialog, opacitySlider]() {
+    const auto saveSettings = [opacitySlider]() {
             QSettings settings;
             settings.setValue(
                 QStringLiteral("floatingQueue/opacity"),
                 opacitySlider->value());
+        };
+    connect(
+        saveButton,
+        &QPushButton::clicked,
+        &dialog,
+        [&dialog, saveSettings]() {
+            saveSettings();
             dialog.accept();
         });
     connect(cancelButton, &QPushButton::clicked, &dialog, [&dialog]() {
         dialog.reject();
     });
+
+    dialog.setCloseDecisionHandler(
+        [&dialog,
+         themeCombo,
+         opacitySlider,
+         originalTheme,
+         originalOpacity,
+         saveSettings]() {
+            const StyleManager::Theme selectedTheme =
+                static_cast<StyleManager::Theme>(
+                    themeCombo->currentData().toInt());
+            const bool hasChanges =
+                selectedTheme != originalTheme ||
+                opacitySlider->value() != originalOpacity;
+            if (!hasChanges)
+            {
+                return SettingsDialog::CloseDecision::Discard;
+            }
+
+            const QMessageBox::StandardButton answer =
+                QMessageBox::question(
+                    &dialog,
+                    QStringLiteral("설정 변경사항"),
+                    QStringLiteral("변경된 설정을 저장하시겠습니까?"),
+                    QMessageBox::Save |
+                        QMessageBox::Discard |
+                        QMessageBox::Cancel,
+                    QMessageBox::Save);
+
+            if (answer == QMessageBox::Save)
+            {
+                saveSettings();
+                return SettingsDialog::CloseDecision::Save;
+            }
+            if (answer == QMessageBox::Discard)
+            {
+                return SettingsDialog::CloseDecision::Discard;
+            }
+            return SettingsDialog::CloseDecision::Cancel;
+        });
 
     if (dialog.exec() != QDialog::Accepted)
     {

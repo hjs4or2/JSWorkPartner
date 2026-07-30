@@ -13,7 +13,7 @@ int main(int argc, char* argv[])
     QApplication application(argc, argv);
     QCoreApplication::setOrganizationName(QStringLiteral("JSWorkManager"));
     QCoreApplication::setApplicationName(QStringLiteral("JSWorkManager"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("0.0.1.1"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("0.0.1.2"));
     QApplication::setApplicationDisplayName(QStringLiteral("JSWorkManager"));
 
     const HANDLE instanceMutex = CreateMutexW(

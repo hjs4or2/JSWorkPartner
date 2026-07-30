@@ -12,6 +12,7 @@
 enc_temp_folder/
 
 # C++ and Qt build output
+/Output/
 **/x64/
 **/Debug/
 **/Release/

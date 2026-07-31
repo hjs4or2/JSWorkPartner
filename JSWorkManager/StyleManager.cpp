@@ -291,6 +291,14 @@ QString StyleManager::styleSheet(Theme theme) const
             padding: 6px;
         }
 
+        QTableView#floatingQueueTable::item {
+            padding: 2px 5px;
+        }
+
+        QTableView#floatingQueueTable QHeaderView::section {
+            padding: 3px 5px;
+        }
+
         QToolButton {
             background: transparent;
             border: 1px solid #C8D3E1;

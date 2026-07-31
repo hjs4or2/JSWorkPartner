@@ -4,7 +4,7 @@ namespace AppConstants
 {
 const QString ApplicationName = QStringLiteral("JSWorkManager");
 const QString OrganizationName = QStringLiteral("JSWorkManager");
-const QString ApplicationVersion = QStringLiteral("0.0.1.3");
+const QString ApplicationVersion = QStringLiteral("1.0.0");
 const QString DatabaseFileName = QStringLiteral("work_manager.db");
 
 const QString FloatingQueueGeometryKey =

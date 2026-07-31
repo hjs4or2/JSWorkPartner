@@ -170,24 +170,24 @@ QueueFloatingWidget::QueueFloatingWidget(
     auto* titleLabel = new QLabel(QStringLiteral("퀘스트 보드"), dragHandle_);
     titleLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
     QFont titleFont = titleLabel->font();
-    titleFont.setPointSize(12);
+    titleFont.setPointSize(11);
     titleFont.setBold(true);
     titleLabel->setFont(titleFont);
 
     auto* closeButton = new CenteredCloseButton(dragHandle_);
     closeButton->setObjectName(QStringLiteral("floatingQueueCloseButton"));
     closeButton->setToolTip(QStringLiteral("위젯 숨기기"));
-    closeButton->setFixedSize(28, 28);
+    closeButton->setFixedSize(24, 24);
 
     auto* minimizeButton = new CenteredMinimizeButton(dragHandle_);
     minimizeButton->setObjectName(
         QStringLiteral("floatingQueueMinimizeButton"));
     minimizeButton->setToolTip(QStringLiteral("접기"));
-    minimizeButton->setFixedSize(28, 28);
+    minimizeButton->setFixedSize(24, 24);
 
     auto* headerLayout = new QHBoxLayout(dragHandle_);
     headerLayout->setContentsMargins(0, 0, 0, 0);
-    headerLayout->setSpacing(8);
+    headerLayout->setSpacing(6);
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch();
     headerLayout->addWidget(minimizeButton);
@@ -197,6 +197,7 @@ QueueFloatingWidget::QueueFloatingWidget(
     proxyModel->setSourceModel(&viewModel_);
 
     table_ = new QTableView(this);
+    table_->setObjectName(QStringLiteral("floatingQueueTable"));
     table_->setModel(proxyModel);
     table_->setItemDelegateForColumn(
         TaskQueueViewModel::DeadlineColumn,
@@ -209,6 +210,9 @@ QueueFloatingWidget::QueueFloatingWidget(
     table_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     table_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     table_->verticalHeader()->setVisible(false);
+    table_->verticalHeader()->setMinimumSectionSize(22);
+    table_->verticalHeader()->setDefaultSectionSize(26);
+    table_->horizontalHeader()->setFixedHeight(25);
     table_->hideColumn(TaskQueueViewModel::DetailsColumn);
     table_->hideColumn(TaskQueueViewModel::DateColumn);
     table_->horizontalHeader()->setSectionResizeMode(
@@ -246,8 +250,8 @@ QueueFloatingWidget::QueueFloatingWidget(
     contentLayout->addLayout(actionLayout);
 
     auto* cardLayout = new QVBoxLayout(card);
-    cardLayout->setContentsMargins(14, 12, 14, 12);
-    cardLayout->setSpacing(8);
+    cardLayout->setContentsMargins(14, 7, 14, 7);
+    cardLayout->setSpacing(6);
     cardLayout->addWidget(dragHandle_);
     cardLayout->addWidget(contentHost, 1);
 
@@ -272,12 +276,16 @@ QueueFloatingWidget::QueueFloatingWidget(
             const bool collapsing = contentHost->isVisible();
             if (collapsing)
             {
+                const QRect expandedGeometry = geometry();
                 expandedSize = size();
                 contentHost->hide();
                 sizeGrip_->hide();
-                setMinimumSize(240, 76);
-                setMaximumSize(240, 76);
-                resize(240, 76);
+                setMinimumSize(240, 62);
+                setMaximumSize(240, 62);
+                resize(240, 62);
+                move(
+                    expandedGeometry.right() - width() + 1,
+                    expandedGeometry.top());
                 minimizeButton->setRestoreMode(true);
                 minimizeButton->setToolTip(QStringLiteral("펼치기"));
             }

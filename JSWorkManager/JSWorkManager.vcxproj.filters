@@ -23,6 +23,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="AppConstants.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -46,6 +49,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AppConstants.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="DeadlineColorDelegate.h">
       <Filter>Header Files</Filter>
     </ClInclude>

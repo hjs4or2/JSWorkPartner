@@ -415,9 +415,79 @@ void QueueFloatingWidget::setCompleteTaskHandler(
 void QueueFloatingWidget::showEvent(QShowEvent* event)
 {
     QWidget::showEvent(event);
+    ensureVisibleOnScreen();
     if (visibilityChangedHandler_)
     {
         visibilityChangedHandler_(true);
+    }
+}
+
+void QueueFloatingWidget::ensureVisibleOnScreen()
+{
+    QDesktopWidget* desktop = QApplication::desktop();
+    if (desktop == nullptr || desktop->screenCount() <= 0)
+    {
+        return;
+    }
+
+    const QRect currentGeometry = geometry();
+    int targetScreen = -1;
+    qint64 largestVisibleArea = 0;
+    for (int screen = 0; screen < desktop->screenCount(); ++screen)
+    {
+        const QRect intersection =
+            currentGeometry.intersected(desktop->screenGeometry(screen));
+        const qint64 visibleArea =
+            static_cast<qint64>(intersection.width()) *
+            intersection.height();
+        if (visibleArea > largestVisibleArea)
+        {
+            largestVisibleArea = visibleArea;
+            targetScreen = screen;
+        }
+    }
+
+    if (targetScreen < 0)
+    {
+        targetScreen = desktop->primaryScreen();
+    }
+
+    const QRect available = desktop->availableGeometry(targetScreen);
+    if (!available.isValid())
+    {
+        return;
+    }
+
+    const QSize visibleSize(
+        qMin(width(), available.width()),
+        qMin(height(), available.height()));
+    if (visibleSize != size())
+    {
+        resize(visibleSize);
+    }
+
+    QPoint visiblePosition = pos();
+    const int maximumX =
+        available.right() - width() + 1;
+    const int maximumY =
+        available.bottom() - height() + 1;
+    visiblePosition.setX(
+        maximumX < available.left()
+            ? available.left()
+            : qBound(
+                  available.left(),
+                  visiblePosition.x(),
+                  maximumX));
+    visiblePosition.setY(
+        maximumY < available.top()
+            ? available.top()
+            : qBound(
+                  available.top(),
+                  visiblePosition.y(),
+                  maximumY));
+    if (visiblePosition != pos())
+    {
+        move(visiblePosition);
     }
 }
 

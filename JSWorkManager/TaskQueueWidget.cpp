@@ -4,13 +4,14 @@
 #include <utility>
 
 #include "DeadlineColorDelegate.h"
+#include "AppConstants.h"
 #include "NullableDateEdit.h"
 #include "QueueFloatingWidget.h"
-
 #include <QtCore/QCoreApplication>
 #include <QtCore/QDate>
 #include <QtCore/QEvent>
 #include <QtCore/QSettings>
+#include <QtCore/QRegularExpression>
 #include <QtCore/QSignalBlocker>
 #include <QtCore/QStringList>
 #include <QtCore/QTimer>
@@ -27,6 +28,7 @@
 #include <QtWidgets/QComboBox>
 #include <QtWidgets/QDateEdit>
 #include <QtWidgets/QDialog>
+#include <QtWidgets/QFormLayout>
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QHeaderView>
 #include <QtWidgets/QLabel>
@@ -52,6 +54,64 @@
 
 namespace
 {
+QString normalizedRedmineUrl(const QString& value)
+{
+    QString normalized = value.trimmed();
+    if (!normalized.isEmpty() &&
+        !normalized.contains(QStringLiteral("://")))
+    {
+        normalized.prepend(QStringLiteral("https://"));
+    }
+    while (normalized.endsWith(QLatin1Char('/')))
+    {
+        normalized.chop(1);
+    }
+    return normalized;
+}
+
+QString redmineReferenceHtml(
+    const QString& text,
+    const QString& redmineUrl)
+{
+    const QString normalizedUrl = normalizedRedmineUrl(redmineUrl);
+    const QUrl url(normalizedUrl);
+    const bool canCreateLinks =
+        url.isValid() &&
+        !url.host().isEmpty() &&
+        (url.scheme() == QStringLiteral("http") ||
+         url.scheme() == QStringLiteral("https"));
+    if (!canCreateLinks)
+    {
+        QString escaped = text.toHtmlEscaped();
+        escaped.replace(QLatin1Char('\n'), QStringLiteral("<br>"));
+        return escaped;
+    }
+
+    static const QRegularExpression issueReference(
+        QStringLiteral("#(\\d+)\\b"));
+    QString html;
+    int previousEnd = 0;
+    QRegularExpressionMatchIterator matches =
+        issueReference.globalMatch(text);
+    while (matches.hasNext())
+    {
+        const QRegularExpressionMatch match = matches.next();
+        html += text.mid(
+                        previousEnd,
+                        match.capturedStart() - previousEnd)
+                    .toHtmlEscaped();
+        const QString issueId = match.captured(1);
+        const QString issueUrl =
+            normalizedUrl + QStringLiteral("/issues/") + issueId;
+        html += QStringLiteral("<a href=\"%1\">#%2</a>")
+                    .arg(issueUrl.toHtmlEscaped(), issueId);
+        previousEnd = match.capturedEnd();
+    }
+    html += text.mid(previousEnd).toHtmlEscaped();
+    html.replace(QLatin1Char('\n'), QStringLiteral("<br>"));
+    return html;
+}
+
 class SettingsDialog final : public QDialog
 {
 public:
@@ -321,10 +381,19 @@ TaskQueueWidget::TaskQueueWidget(
     selectedTitleFont.setBold(true);
     selectedTitleLabel_->setFont(selectedTitleFont);
     selectedTitleLabel_->setWordWrap(true);
+    selectedTitleLabel_->setTextFormat(Qt::RichText);
+    selectedTitleLabel_->setTextInteractionFlags(
+        Qt::TextSelectableByMouse |
+        Qt::LinksAccessibleByMouse);
+    selectedTitleLabel_->setOpenExternalLinks(true);
 
     selectedDetailsLabel_ = new QLabel(QStringLiteral("-"), selectedDisplayWidget_);
     selectedDetailsLabel_->setWordWrap(true);
-    selectedDetailsLabel_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    selectedDetailsLabel_->setTextFormat(Qt::RichText);
+    selectedDetailsLabel_->setTextInteractionFlags(
+        Qt::TextSelectableByMouse |
+        Qt::LinksAccessibleByMouse);
+    selectedDetailsLabel_->setOpenExternalLinks(true);
     selectedDetailsLabel_->setMinimumHeight(42);
 
     selectedMetaLabel_ = new QLabel(QStringLiteral("-"), selectedDisplayWidget_);
@@ -534,7 +603,7 @@ TaskQueueWidget::~TaskQueueWidget()
     {
         QSettings settings;
         settings.setValue(
-            QStringLiteral("floatingQueue/geometry"),
+            AppConstants::FloatingQueueGeometryKey,
             floatingQueueWidget_->saveGeometry());
         delete floatingQueueWidget_;
         floatingQueueWidget_ = nullptr;
@@ -628,13 +697,14 @@ void TaskQueueWidget::setupTrayIcon()
         qBound(
             20,
             settings.value(
-                        QStringLiteral("floatingQueue/opacity"),
+                        AppConstants::FloatingQueueOpacityKey,
                         100)
                 .toInt(),
             100);
     floatingQueueWidget_->setWindowOpacity(savedOpacity / 100.0);
     const QByteArray savedGeometry =
-        settings.value(QStringLiteral("floatingQueue/geometry")).toByteArray();
+        settings.value(
+            AppConstants::FloatingQueueGeometryKey).toByteArray();
     if (!savedGeometry.isEmpty())
     {
         floatingQueueWidget_->restoreGeometry(savedGeometry);
@@ -647,12 +717,12 @@ void TaskQueueWidget::setupTrayIcon()
         }
         QSettings stateSettings;
         stateSettings.setValue(
-            QStringLiteral("floatingQueue/visible"),
+            AppConstants::FloatingQueueVisibleKey,
             visible);
         if (!visible && floatingQueueWidget_ != nullptr)
         {
             stateSettings.setValue(
-                QStringLiteral("floatingQueue/geometry"),
+                AppConstants::FloatingQueueGeometryKey,
                 floatingQueueWidget_->saveGeometry());
         }
     });
@@ -703,7 +773,7 @@ void TaskQueueWidget::setupTrayIcon()
         });
 
     if (settings.value(
-            QStringLiteral("floatingQueue/visible"),
+            AppConstants::FloatingQueueVisibleKey,
             false).toBool())
     {
         floatingQueueAction_->setChecked(true);
@@ -721,10 +791,12 @@ void TaskQueueWidget::showSettingsDialog()
         qBound(
             20,
             settings.value(
-                        QStringLiteral("floatingQueue/opacity"),
+                        AppConstants::FloatingQueueOpacityKey,
                         100)
                 .toInt(),
             100);
+    const QString originalRedmineUrl =
+        settings.value(AppConstants::RedmineUrlKey).toString();
 
     SettingsDialog dialog(this);
     dialog.setWindowTitle(QStringLiteral("Settings"));
@@ -797,6 +869,29 @@ void TaskQueueWidget::showSettingsDialog()
     opacityLayout->addWidget(opacitySlider, 1);
     opacityLayout->addWidget(opacityValueLabel);
 
+    auto* redmineSettingsLabel =
+        new QLabel(QStringLiteral("Redmine 링크"), &dialog);
+    QFont redmineLabelFont = redmineSettingsLabel->font();
+    redmineLabelFont.setBold(true);
+    redmineSettingsLabel->setFont(redmineLabelFont);
+
+    auto* redmineUrlEdit = new QLineEdit(&dialog);
+    redmineUrlEdit->setPlaceholderText(
+        QStringLiteral("https://redmine.example.com"));
+    redmineUrlEdit->setText(originalRedmineUrl);
+    redmineUrlEdit->setClearButtonEnabled(true);
+
+    auto* redmineDescriptionLabel = new QLabel(
+        QStringLiteral(
+            "퀘스트 제목이나 상세 설명의 #번호를 Redmine 일감 링크로 표시합니다."),
+        &dialog);
+    redmineDescriptionLabel->setWordWrap(true);
+
+    auto* redmineForm = new QFormLayout();
+    redmineForm->setContentsMargins(0, 0, 0, 0);
+    redmineForm->setSpacing(8);
+    redmineForm->addRow(QStringLiteral("도메인 주소"), redmineUrlEdit);
+
     auto* saveButton = new QPushButton(QStringLiteral("저장"), &dialog);
     saveButton->setObjectName(QStringLiteral("primaryButton"));
     auto* cancelButton = new QPushButton(QStringLiteral("취소"), &dialog);
@@ -815,6 +910,10 @@ void TaskQueueWidget::showSettingsDialog()
     layout->addSpacing(12);
     layout->addWidget(boardSettingsLabel);
     layout->addLayout(opacityLayout);
+    layout->addSpacing(12);
+    layout->addWidget(redmineSettingsLabel);
+    layout->addLayout(redmineForm);
+    layout->addWidget(redmineDescriptionLabel);
     layout->addSpacing(12);
     layout->addWidget(dataPathLabel);
     layout->addWidget(databasePathEdit);
@@ -843,11 +942,16 @@ void TaskQueueWidget::showSettingsDialog()
                 floatingQueueWidget_->setWindowOpacity(opacity / 100.0);
             }
         });
-    const auto saveSettings = [opacitySlider]() {
+    const auto saveSettings =
+        [opacitySlider,
+         redmineUrlEdit]() {
             QSettings settings;
             settings.setValue(
-                QStringLiteral("floatingQueue/opacity"),
+                AppConstants::FloatingQueueOpacityKey,
                 opacitySlider->value());
+            settings.setValue(
+                AppConstants::RedmineUrlKey,
+                normalizedRedmineUrl(redmineUrlEdit->text()));
         };
     connect(
         saveButton,
@@ -865,15 +969,19 @@ void TaskQueueWidget::showSettingsDialog()
         [&dialog,
          themeCombo,
          opacitySlider,
+         redmineUrlEdit,
          originalTheme,
          originalOpacity,
+         originalRedmineUrl,
          saveSettings]() {
             const StyleManager::Theme selectedTheme =
                 static_cast<StyleManager::Theme>(
                     themeCombo->currentData().toInt());
             const bool hasChanges =
                 selectedTheme != originalTheme ||
-                opacitySlider->value() != originalOpacity;
+                opacitySlider->value() != originalOpacity ||
+                normalizedRedmineUrl(redmineUrlEdit->text()) !=
+                    originalRedmineUrl;
             if (!hasChanges)
             {
                 return SettingsDialog::CloseDecision::Discard;
@@ -909,6 +1017,10 @@ void TaskQueueWidget::showSettingsDialog()
             floatingQueueWidget_->setWindowOpacity(
                 originalOpacity / 100.0);
         }
+    }
+    else
+    {
+        updateSelectedTaskDetails();
     }
 }
 
@@ -1341,11 +1453,15 @@ void TaskQueueWidget::updateSelectedTaskDetails()
     {
         workTabs_->setCurrentIndex(1);
     }
-    selectedTitleLabel_->setText(task.title);
+    QSettings settings;
+    const QString redmineUrl =
+        settings.value(AppConstants::RedmineUrlKey).toString();
+    selectedTitleLabel_->setText(
+        redmineReferenceHtml(task.title, redmineUrl));
     selectedDetailsLabel_->setText(
         task.details.isEmpty()
             ? QStringLiteral("상세 설명이 없습니다.")
-            : task.details);
+            : redmineReferenceHtml(task.details, redmineUrl));
 
     QString stars;
     for (int index = 1; index <= 5; ++index)

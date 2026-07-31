@@ -11,6 +11,8 @@
 #include <QtSql/QSqlDriver>
 #include <QtCore/QVariant>
 
+#include "AppConstants.h"
+
 TaskRepository::TaskRepository()
     : connectionName_(
           QStringLiteral("task_repository_%1")
@@ -56,7 +58,8 @@ bool TaskRepository::initialize()
         return false;
     }
 
-    databasePath_ = QDir(dataDirectory).filePath(QStringLiteral("work_manager.db"));
+    databasePath_ =
+        QDir(dataDirectory).filePath(AppConstants::DatabaseFileName);
     database_.setDatabaseName(databasePath_);
 
     if (!database_.open())

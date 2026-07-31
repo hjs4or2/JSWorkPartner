@@ -33,6 +33,8 @@ protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
+    void ensureVisibleOnScreen();
+
     TaskQueueViewModel& viewModel_;
     QTableView* table_ = nullptr;
     QSizeGrip* sizeGrip_ = nullptr;

@@ -1,8 +1,10 @@
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QMessageBox>
+#include <QtCore/QSettings>
 
 #include <Windows.h>
 
+#include "AppConstants.h"
 #include "TaskQueueViewModel.h"
 #include "TaskQueueWidget.h"
 #include "TaskRepository.h"
@@ -11,15 +13,20 @@
 int main(int argc, char* argv[])
 {
     QApplication application(argc, argv);
-    QCoreApplication::setOrganizationName(QStringLiteral("JSWorkManager"));
-    QCoreApplication::setApplicationName(QStringLiteral("JSWorkManager"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("0.0.1.2"));
-    QApplication::setApplicationDisplayName(QStringLiteral("JSWorkManager"));
+    QCoreApplication::setOrganizationName(AppConstants::OrganizationName);
+    QCoreApplication::setApplicationName(AppConstants::ApplicationName);
+    QCoreApplication::setApplicationVersion(AppConstants::ApplicationVersion);
+    QApplication::setApplicationDisplayName(AppConstants::ApplicationName);
+
+    QSettings settings;
+    settings.remove(AppConstants::LegacyRedmineApiKeyKey);
+    settings.remove(AppConstants::LegacyRedmineProjectIdKey);
+    settings.remove(AppConstants::LegacyRedmineProjectNameKey);
 
     const HANDLE instanceMutex = CreateMutexW(
         nullptr,
         FALSE,
-        L"Local\\JSWorkManager.SingleInstance.0A88D32A");
+        AppConstants::SingleInstanceMutexName);
     if (instanceMutex == nullptr)
     {
         QMessageBox::critical(
@@ -33,9 +40,10 @@ int main(int argc, char* argv[])
         CloseHandle(instanceMutex);
         QMessageBox::information(
             nullptr,
-            QStringLiteral("JSWorkManager"),
-            QStringLiteral("JSWorkManager가 이미 실행 중입니다.\n"
-                           "시스템 트레이를 확인해 주세요."));
+            AppConstants::ApplicationName,
+            QStringLiteral("%1가 이미 실행 중입니다.\n"
+                           "시스템 트레이를 확인해 주세요.")
+                .arg(AppConstants::ApplicationName));
         return 0;
     }
 

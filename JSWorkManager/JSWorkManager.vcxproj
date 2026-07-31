@@ -105,6 +105,7 @@ if exist "$(VCInstallDir)Redist\MSVC\$(VCToolsRedistVersion)\x64\Microsoft.VC143
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="AppConstants.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="NullableDateEdit.cpp" />
     <ClCompile Include="QueueFloatingWidget.cpp" />
@@ -114,6 +115,7 @@ if exist "$(VCInstallDir)Redist\MSVC\$(VCToolsRedistVersion)\x64\Microsoft.VC143
     <ClCompile Include="TaskRepository.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AppConstants.h" />
     <ClInclude Include="DeadlineColorDelegate.h" />
     <ClInclude Include="NullableDateEdit.h" />
     <ClInclude Include="QueueFloatingWidget.h" />

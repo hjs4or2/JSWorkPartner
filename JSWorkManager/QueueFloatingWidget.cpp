@@ -167,12 +167,35 @@ QueueFloatingWidget::QueueFloatingWidget(
     dragHandle_->setObjectName(QStringLiteral("floatingQueueHeader"));
     dragHandle_->installEventFilter(this);
 
-    auto* titleLabel = new QLabel(QStringLiteral("퀘스트 보드"), dragHandle_);
+    auto* titleLabel = new QLabel(dragHandle_);
     titleLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
     QFont titleFont = titleLabel->font();
     titleFont.setPointSize(11);
     titleFont.setBold(true);
     titleLabel->setFont(titleFont);
+    const auto updateTitle = [this, titleLabel]() {
+        const QString titleFormat =
+            titleLabel->property("compact").toBool()
+                ? QStringLiteral("남은 퀘스트: %1")
+                : QStringLiteral("퀘스트 보드 | 남은 퀘스트: %1");
+        titleLabel->setText(titleFormat.arg(viewModel_.taskCount()));
+    };
+    updateTitle();
+    connect(
+        &viewModel_,
+        &QAbstractItemModel::modelReset,
+        titleLabel,
+        updateTitle);
+    connect(
+        &viewModel_,
+        &QAbstractItemModel::rowsInserted,
+        titleLabel,
+        updateTitle);
+    connect(
+        &viewModel_,
+        &QAbstractItemModel::rowsRemoved,
+        titleLabel,
+        updateTitle);
 
     auto* closeButton = new CenteredCloseButton(dragHandle_);
     closeButton->setObjectName(QStringLiteral("floatingQueueCloseButton"));
@@ -213,11 +236,9 @@ QueueFloatingWidget::QueueFloatingWidget(
     table_->verticalHeader()->setMinimumSectionSize(22);
     table_->verticalHeader()->setDefaultSectionSize(26);
     table_->horizontalHeader()->setFixedHeight(25);
+    table_->hideColumn(TaskQueueViewModel::SequenceColumn);
     table_->hideColumn(TaskQueueViewModel::DetailsColumn);
     table_->hideColumn(TaskQueueViewModel::DateColumn);
-    table_->horizontalHeader()->setSectionResizeMode(
-        TaskQueueViewModel::SequenceColumn,
-        QHeaderView::ResizeToContents);
     table_->horizontalHeader()->setSectionResizeMode(
         TaskQueueViewModel::TitleColumn,
         QHeaderView::Stretch);
@@ -272,6 +293,8 @@ QueueFloatingWidget::QueueFloatingWidget(
         [this,
          contentHost,
          minimizeButton,
+         titleLabel,
+         updateTitle,
          expandedSize = QSize()]() mutable {
             const bool collapsing = contentHost->isVisible();
             if (collapsing)
@@ -279,6 +302,8 @@ QueueFloatingWidget::QueueFloatingWidget(
                 const QRect expandedGeometry = geometry();
                 expandedSize = size();
                 contentHost->hide();
+                titleLabel->setProperty("compact", true);
+                updateTitle();
                 sizeGrip_->hide();
                 setMinimumSize(240, 62);
                 setMaximumSize(240, 62);
@@ -294,6 +319,8 @@ QueueFloatingWidget::QueueFloatingWidget(
                 setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
                 setMinimumSize(480, 270);
                 contentHost->show();
+                titleLabel->setProperty("compact", false);
+                updateTitle();
                 sizeGrip_->show();
                 const QSize restoredSize =
                     expandedSize.isValid()

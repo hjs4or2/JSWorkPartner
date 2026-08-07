@@ -9,10 +9,15 @@
 #include "QueueFloatingWidget.h"
 #include <QtCore/QCoreApplication>
 #include <QtCore/QDate>
+#include <QtCore/QDir>
 #include <QtCore/QEvent>
+#include <QtCore/QFile>
+#include <QtCore/QFileInfo>
 #include <QtCore/QSettings>
+#include <QtCore/QSaveFile>
 #include <QtCore/QRegularExpression>
 #include <QtCore/QSignalBlocker>
+#include <QtCore/QStandardPaths>
 #include <QtCore/QStringList>
 #include <QtCore/QTimer>
 #include <QtCore/QUrl>
@@ -28,6 +33,7 @@
 #include <QtWidgets/QComboBox>
 #include <QtWidgets/QDateEdit>
 #include <QtWidgets/QDialog>
+#include <QtWidgets/QFileDialog>
 #include <QtWidgets/QFormLayout>
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QHeaderView>
@@ -180,6 +186,12 @@ TaskQueueWidget::TaskQueueWidget(
             .arg(QCoreApplication::applicationVersion()));
     resize(1120, 760);
     setMinimumSize(900, 620);
+    const QByteArray savedMainWindowGeometry =
+        QSettings().value(AppConstants::MainWindowGeometryKey).toByteArray();
+    if (!savedMainWindowGeometry.isEmpty())
+    {
+        restoreGeometry(savedMainWindowGeometry);
+    }
 
     auto* listTitleLabel = new QLabel(QStringLiteral("진행 중인 퀘스트"), this);
     QFont titleFont = listTitleLabel->font();
@@ -216,7 +228,8 @@ TaskQueueWidget::TaskQueueWidget(
     externalLinkLabel->setFont(inputLabelFont);
 
     externalLinkInput_ = new QLineEdit(this);
-    externalLinkInput_->setPlaceholderText(QString());
+    externalLinkInput_->setPlaceholderText(
+        QStringLiteral("https://example.com 또는 example.com (선택)"));
     externalLinkInput_->setClearButtonEnabled(true);
 
     auto* optionsLayout = new QHBoxLayout();
@@ -265,10 +278,12 @@ TaskQueueWidget::TaskQueueWidget(
     addButton_->setMinimumHeight(38);
     addButton_->setToolTip(
         QStringLiteral(
+            "Ctrl+N으로 새 퀘스트 입력 화면을 열 수 있습니다.\n"
             "새 퀘스트는 중요도 1, 마감일 X로 저장됩니다.\n"
             "목록에서 퀘스트를 선택한 뒤 완료 버튼을 누르세요."));
 
     cancelEditButton_ = new QPushButton(QStringLiteral("수정 취소"), this);
+    cancelEditButton_->setToolTip(QStringLiteral("Esc"));
     cancelEditButton_->setVisible(false);
 
     queueCountLabel_ = new QLabel(this);
@@ -279,6 +294,83 @@ TaskQueueWidget::TaskQueueWidget(
     pendingPreviewTable_->setModel(&pendingViewModel_);
     pendingFullTable_->setModel(&pendingViewModel_);
     completedTable_->setModel(&completedViewModel_);
+
+    QSettings tableSettings;
+    const int pendingSortColumn = qBound(
+        0,
+        tableSettings.value(
+                         AppConstants::PendingSortColumnKey,
+                         TaskQueueViewModel::SequenceColumn)
+            .toInt(),
+        TaskQueueViewModel::ColumnCount - 1);
+    const Qt::SortOrder pendingSortOrder =
+        tableSettings.value(
+                         AppConstants::PendingSortOrderKey,
+                         static_cast<int>(Qt::AscendingOrder))
+                    .toInt() == static_cast<int>(Qt::DescendingOrder)
+            ? Qt::DescendingOrder
+            : Qt::AscendingOrder;
+    const int completedSortColumn = qBound(
+        0,
+        tableSettings.value(
+                         AppConstants::CompletedSortColumnKey,
+                         TaskQueueViewModel::SequenceColumn)
+            .toInt(),
+        TaskQueueViewModel::ColumnCount - 1);
+    const Qt::SortOrder completedSortOrder =
+        tableSettings.value(
+                         AppConstants::CompletedSortOrderKey,
+                         static_cast<int>(Qt::AscendingOrder))
+                    .toInt() == static_cast<int>(Qt::DescendingOrder)
+            ? Qt::DescendingOrder
+            : Qt::AscendingOrder;
+
+    pendingPreviewTable_->horizontalHeader()->setSortIndicator(
+        pendingSortColumn,
+        pendingSortOrder);
+    pendingFullTable_->horizontalHeader()->setSortIndicator(
+        pendingSortColumn,
+        pendingSortOrder);
+    completedTable_->horizontalHeader()->setSortIndicator(
+        completedSortColumn,
+        completedSortOrder);
+    pendingPreviewTable_->setSortingEnabled(true);
+    pendingFullTable_->setSortingEnabled(true);
+    completedTable_->setSortingEnabled(true);
+
+    const auto connectPendingSort =
+        [this](QTableView* source, QTableView* peer) {
+            connect(
+                source->horizontalHeader(),
+                &QHeaderView::sortIndicatorChanged,
+                this,
+                [peer](int column, Qt::SortOrder order) {
+                    const QSignalBlocker blocker(peer->horizontalHeader());
+                    peer->horizontalHeader()->setSortIndicator(column, order);
+                    QSettings settings;
+                    settings.setValue(
+                        AppConstants::PendingSortColumnKey,
+                        column);
+                    settings.setValue(
+                        AppConstants::PendingSortOrderKey,
+                        static_cast<int>(order));
+                });
+        };
+    connectPendingSort(pendingPreviewTable_, pendingFullTable_);
+    connectPendingSort(pendingFullTable_, pendingPreviewTable_);
+    connect(
+        completedTable_->horizontalHeader(),
+        &QHeaderView::sortIndicatorChanged,
+        this,
+        [](int column, Qt::SortOrder order) {
+            QSettings settings;
+            settings.setValue(
+                AppConstants::CompletedSortColumnKey,
+                column);
+            settings.setValue(
+                AppConstants::CompletedSortOrderKey,
+                static_cast<int>(order));
+        });
 
     const std::array<QTableView*, 3> tables{{
         pendingPreviewTable_,
@@ -298,7 +390,10 @@ TaskQueueWidget::TaskQueueWidget(
         table->verticalHeader()->setVisible(false);
         table->horizontalHeader()->setSectionResizeMode(
             TaskQueueViewModel::SequenceColumn,
-            QHeaderView::ResizeToContents);
+            QHeaderView::Interactive);
+        table->horizontalHeader()->resizeSection(
+            TaskQueueViewModel::SequenceColumn,
+            92);
         table->horizontalHeader()->setSectionResizeMode(
             TaskQueueViewModel::TitleColumn,
             QHeaderView::ResizeToContents);
@@ -533,7 +628,14 @@ TaskQueueWidget::TaskQueueWidget(
         cancelEditing();
     });
     connect(completeButton_, &QPushButton::clicked, this, [this]() {
-        completeSelectedTask();
+        if (selectedTable_ == completedTable_)
+        {
+            reopenSelectedTask();
+        }
+        else
+        {
+            completeSelectedTask();
+        }
     });
     connect(externalLinkButton_, &QPushButton::clicked, this, [this]() {
         if (!selectedExternalUrl_.isEmpty())
@@ -573,6 +675,34 @@ TaskQueueWidget::TaskQueueWidget(
             [this, table](const QPoint& position) {
                 showTableContextMenu(table, position);
             });
+        auto* copyShortcut =
+            new QShortcut(QKeySequence::Copy, table);
+        copyShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(
+            copyShortcut,
+            &QShortcut::activated,
+            this,
+            [this, table]() {
+                if (table->selectionModel()->hasSelection())
+                {
+                    selectedTable_ = table;
+                    copySelectedTaskToClipboard();
+                }
+            });
+        auto* deleteShortcut =
+            new QShortcut(QKeySequence(Qt::Key_Delete), table);
+        deleteShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(
+            deleteShortcut,
+            &QShortcut::activated,
+            this,
+            [this, table]() {
+                if (table->selectionModel()->hasSelection())
+                {
+                    selectedTable_ = table;
+                    deleteSelectedTask();
+                }
+            });
     }
 
     auto* addShortcut = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_Return), this);
@@ -582,6 +712,41 @@ TaskQueueWidget::TaskQueueWidget(
         QKeySequence(Qt::CTRL + Qt::Key_Enter),
         this);
     connect(addNumpadShortcut, &QShortcut::activated, this, [this]() { addTask(); });
+
+    auto* newTaskShortcut =
+        new QShortcut(QKeySequence::New, this);
+    connect(
+        newTaskShortcut,
+        &QShortcut::activated,
+        this,
+        [this]() {
+            if (editingTaskId_ == 0)
+            {
+                workTabs_->setCurrentIndex(0);
+                titleInput_->setFocus();
+            }
+        });
+
+    auto* editShortcut =
+        new QShortcut(QKeySequence(Qt::Key_F2), this);
+    connect(
+        editShortcut,
+        &QShortcut::activated,
+        this,
+        [this]() { startEditing(); });
+
+    auto* cancelEditingShortcut =
+        new QShortcut(QKeySequence(Qt::Key_Escape), this);
+    connect(
+        cancelEditingShortcut,
+        &QShortcut::activated,
+        this,
+        [this]() {
+            if (editingTaskId_ != 0)
+            {
+                cancelEditing();
+            }
+        });
 
     auto* deadlineRefreshTimer = new QTimer(this);
     deadlineRefreshTimer->setInterval(60 * 1000);
@@ -599,9 +764,13 @@ TaskQueueWidget::TaskQueueWidget(
 
 TaskQueueWidget::~TaskQueueWidget()
 {
+    QSettings settings;
+    settings.setValue(
+        AppConstants::MainWindowGeometryKey,
+        saveGeometry());
+
     if (floatingQueueWidget_ != nullptr)
     {
-        QSettings settings;
         settings.setValue(
             AppConstants::FloatingQueueGeometryKey,
             floatingQueueWidget_->saveGeometry());
@@ -630,6 +799,10 @@ void TaskQueueWidget::showInitialView()
 
 void TaskQueueWidget::closeEvent(QCloseEvent* event)
 {
+    QSettings().setValue(
+        AppConstants::MainWindowGeometryKey,
+        saveGeometry());
+
     if (trayIcon_ != nullptr && trayIcon_->isVisible())
     {
         hide();
@@ -841,6 +1014,16 @@ void TaskQueueWidget::showSettingsDialog()
     databasePathEdit->setText(pendingViewModel_.databasePath());
     databasePathEdit->setToolTip(pendingViewModel_.databasePath());
     databasePathEdit->setCursorPosition(0);
+    auto* openDataFolderButton =
+        new QPushButton(QStringLiteral("폴더 열기"), &dialog);
+    auto* backupDataButton =
+        new QPushButton(QStringLiteral("백업 저장"), &dialog);
+    auto* dataPathLayout = new QHBoxLayout();
+    dataPathLayout->setContentsMargins(0, 0, 0, 0);
+    dataPathLayout->setSpacing(8);
+    dataPathLayout->addWidget(databasePathEdit, 1);
+    dataPathLayout->addWidget(openDataFolderButton);
+    dataPathLayout->addWidget(backupDataButton);
 
     auto* boardSettingsLabel =
         new QLabel(QStringLiteral("퀘스트 보드 설정"), &dialog);
@@ -916,7 +1099,7 @@ void TaskQueueWidget::showSettingsDialog()
     layout->addWidget(redmineDescriptionLabel);
     layout->addSpacing(12);
     layout->addWidget(dataPathLabel);
-    layout->addWidget(databasePathEdit);
+    layout->addLayout(dataPathLayout);
     layout->addSpacing(12);
     layout->addLayout(actionLayout);
 
@@ -941,6 +1124,96 @@ void TaskQueueWidget::showSettingsDialog()
             {
                 floatingQueueWidget_->setWindowOpacity(opacity / 100.0);
             }
+        });
+    connect(
+        openDataFolderButton,
+        &QPushButton::clicked,
+        &dialog,
+        [this]() {
+            const QFileInfo databaseFile(pendingViewModel_.databasePath());
+            QDesktopServices::openUrl(
+                QUrl::fromLocalFile(databaseFile.absolutePath()));
+        });
+    connect(
+        backupDataButton,
+        &QPushButton::clicked,
+        &dialog,
+        [this, &dialog]() {
+            const QString sourcePath = pendingViewModel_.databasePath();
+            const QString documentsPath =
+                QStandardPaths::writableLocation(
+                    QStandardPaths::DocumentsLocation);
+            const QString suggestedName =
+                QStringLiteral("JSWorkManager-backup-%1.db")
+                    .arg(QDateTime::currentDateTime().toString(
+                        QStringLiteral("yyyyMMdd-HHmmss")));
+            const QString suggestedPath =
+                QDir(documentsPath).filePath(suggestedName);
+            const QString destinationPath = QFileDialog::getSaveFileName(
+                &dialog,
+                QStringLiteral("퀘스트 데이터 백업"),
+                suggestedPath,
+                QStringLiteral("SQLite 데이터베이스 (*.db);;모든 파일 (*.*)"));
+            if (destinationPath.isEmpty())
+            {
+                return;
+            }
+            if (QFileInfo(sourcePath).absoluteFilePath().compare(
+                    QFileInfo(destinationPath).absoluteFilePath(),
+                    Qt::CaseInsensitive) == 0)
+            {
+                QMessageBox::warning(
+                    &dialog,
+                    QStringLiteral("백업 경로 확인"),
+                    QStringLiteral(
+                        "현재 사용 중인 데이터베이스 파일에는 백업할 수 없습니다.\n"
+                        "다른 파일 이름이나 폴더를 선택해 주세요."));
+                return;
+            }
+
+            QFile source(sourcePath);
+            QSaveFile destination(destinationPath);
+            if (!source.open(QIODevice::ReadOnly) ||
+                !destination.open(QIODevice::WriteOnly))
+            {
+                QMessageBox::critical(
+                    &dialog,
+                    QStringLiteral("백업 실패"),
+                    QStringLiteral("백업 파일을 열 수 없습니다."));
+                return;
+            }
+
+            bool copySucceeded = true;
+            while (!source.atEnd())
+            {
+                const QByteArray chunk = source.read(64 * 1024);
+                if (chunk.isEmpty() && source.error() != QFile::NoError)
+                {
+                    copySucceeded = false;
+                    break;
+                }
+                if (destination.write(chunk) != chunk.size())
+                {
+                    copySucceeded = false;
+                    break;
+                }
+            }
+
+            if (!copySucceeded || !destination.commit())
+            {
+                destination.cancelWriting();
+                QMessageBox::critical(
+                    &dialog,
+                    QStringLiteral("백업 실패"),
+                    QStringLiteral("데이터를 백업 파일에 저장하지 못했습니다."));
+                return;
+            }
+
+            QMessageBox::information(
+                &dialog,
+                QStringLiteral("백업 완료"),
+                QStringLiteral("퀘스트 데이터를 백업했습니다.\n%1")
+                    .arg(QDir::toNativeSeparators(destinationPath)));
         });
     const auto saveSettings =
         [opacitySlider,
@@ -1049,11 +1322,21 @@ void TaskQueueWidget::showTrayHint()
 
 void TaskQueueWidget::addTask()
 {
-    const bool wasEditing = editingRow_ >= 0 && editingViewModel_ != nullptr;
-    const int editedRow = editingRow_;
-    QTableView* const editedTable = selectedTable_;
+    const bool wasEditing =
+        editingTaskId_ != 0 && editingViewModel_ != nullptr;
+    const qint64 editedTaskId = editingTaskId_;
+    QTableView* const editedTable = editingTable_;
     TaskQueueViewModel* const savedViewModel =
         wasEditing ? editingViewModel_ : &pendingViewModel_;
+    const int editedRow =
+        wasEditing ? savedViewModel->rowForTaskId(editedTaskId) : -1;
+    if (wasEditing && editedRow < 0)
+    {
+        cancelEditing();
+        statusLabel_->setText(
+            QStringLiteral("수정 중인 퀘스트를 찾을 수 없습니다."));
+        return;
+    }
     const QDate selectedDeadline = deadlineInput_->nullableDate();
     const QString deadline =
         selectedDeadline.isValid()
@@ -1061,9 +1344,9 @@ void TaskQueueWidget::addTask()
             : QString();
 
     const bool saved =
-        editingRow_ >= 0 && editingViewModel_ != nullptr
+        wasEditing
             ? editingViewModel_->updateTask(
-                  editingRow_,
+                  editedRow,
                   titleInput_->text(),
                   detailsInput_->toPlainText(),
                   externalLinkInput_->text(),
@@ -1089,8 +1372,9 @@ void TaskQueueWidget::addTask()
     setImportance(1);
     deadlineInput_->clearDate();
     deadlineClearButton_->setVisible(false);
-    editingRow_ = -1;
+    editingTaskId_ = 0;
     editingViewModel_ = nullptr;
+    editingTable_ = nullptr;
     addButton_->setText(QStringLiteral("새 퀘스트  (Ctrl+Enter)"));
     cancelEditButton_->setVisible(false);
     statusLabel_->setText(savedViewModel->lastMessage());
@@ -1098,10 +1382,12 @@ void TaskQueueWidget::addTask()
     {
         setEditingUi(false);
     }
-    if (wasEditing && editedTable != nullptr && editedRow >= 0)
+    const int updatedRow =
+        wasEditing ? savedViewModel->rowForTaskId(editedTaskId) : -1;
+    if (wasEditing && editedTable != nullptr && updatedRow >= 0)
     {
         selectedTable_ = editedTable;
-        editedTable->selectRow(editedRow);
+        editedTable->selectRow(updatedRow);
         workTabs_->setCurrentIndex(1);
     }
     else
@@ -1134,8 +1420,9 @@ void TaskQueueWidget::startEditing()
         return;
     }
 
-    editingRow_ = row;
+    editingTaskId_ = task.id;
     editingViewModel_ = targetViewModel;
+    editingTable_ = selectedTable_;
     titleInput_->setText(task.title);
     detailsInput_->setPlainText(task.details);
     externalLinkInput_->setText(task.externalUrl);
@@ -1156,9 +1443,10 @@ void TaskQueueWidget::startEditing()
 
 void TaskQueueWidget::cancelEditing()
 {
-    const bool wasEditing = editingRow_ >= 0;
-    editingRow_ = -1;
+    const bool wasEditing = editingTaskId_ != 0;
+    editingTaskId_ = 0;
     editingViewModel_ = nullptr;
+    editingTable_ = nullptr;
     titleInput_->clear();
     detailsInput_->clear();
     externalLinkInput_->clear();
@@ -1203,6 +1491,120 @@ void TaskQueueWidget::completeSelectedTask()
     updateUiState();
 }
 
+void TaskQueueWidget::reopenSelectedTask()
+{
+    if (selectedTable_ != completedTable_)
+    {
+        return;
+    }
+
+    const int row = completedTable_->currentIndex().row();
+    if (!completedViewModel_.reopenTask(row))
+    {
+        showViewModelError();
+        return;
+    }
+
+    if (!pendingViewModel_.loadPendingTasks())
+    {
+        showViewModelError();
+        return;
+    }
+
+    selectedTable_ = nullptr;
+    pendingPreviewTable_->clearSelection();
+    pendingFullTable_->clearSelection();
+    completedTable_->clearSelection();
+    statusLabel_->setText(completedViewModel_.lastMessage());
+    updateSelectedTaskDetails();
+    updateUiState();
+}
+
+void TaskQueueWidget::duplicateSelectedTask()
+{
+    const Task sourceTask = selectedTask();
+    if (sourceTask.id == 0)
+    {
+        return;
+    }
+
+    const QString copyTitle = uniqueCopyTitle(sourceTask.title);
+    if (!pendingViewModel_.addTask(
+            copyTitle,
+            sourceTask.details,
+            sourceTask.externalUrl,
+            sourceTask.importance,
+            sourceTask.deadline))
+    {
+        showViewModelError();
+        return;
+    }
+
+    int copiedRow = -1;
+    for (int row = 0; row < pendingViewModel_.taskCount(); ++row)
+    {
+        if (pendingViewModel_.taskAt(row).title == copyTitle)
+        {
+            copiedRow = row;
+            break;
+        }
+    }
+
+    queueTabs_->setCurrentIndex(0);
+    if (copiedRow >= 0)
+    {
+        pendingFullTable_->selectRow(copiedRow);
+        selectedTable_ = pendingFullTable_;
+    }
+    statusLabel_->setText(pendingViewModel_.lastMessage());
+    updateSelectedTaskDetails();
+    updateUiState();
+}
+
+void TaskQueueWidget::copySelectedTaskToClipboard()
+{
+    const Task task = selectedTask();
+    if (task.id == 0)
+    {
+        return;
+    }
+
+    QStringList lines;
+    lines.append(
+        QStringLiteral("퀘스트 %1: %2")
+            .arg(task.sequence)
+            .arg(task.title));
+    lines.append(
+        QStringLiteral("상태: %1")
+            .arg(task.completed
+                     ? QStringLiteral("완료")
+                     : QStringLiteral("진행 중")));
+    lines.append(
+        QStringLiteral("중요도: %1/5").arg(task.importance));
+    lines.append(
+        QStringLiteral("마감일: %1")
+            .arg(task.deadline.isEmpty()
+                     ? QStringLiteral("없음")
+                     : task.deadline));
+    if (!task.details.isEmpty())
+    {
+        lines.append(QString());
+        lines.append(QStringLiteral("상세 설명"));
+        lines.append(task.details);
+    }
+    if (!task.externalUrl.isEmpty())
+    {
+        lines.append(QString());
+        lines.append(
+            QStringLiteral("외부 링크: %1").arg(task.externalUrl));
+    }
+
+    QApplication::clipboard()->setText(lines.join(QLatin1Char('\n')));
+    statusLabel_->setText(
+        QStringLiteral("%1번 퀘스트 정보를 복사했습니다.")
+            .arg(task.sequence));
+}
+
 void TaskQueueWidget::deleteSelectedTask()
 {
     const Task task = selectedTask();
@@ -1239,7 +1641,8 @@ void TaskQueueWidget::deleteSelectedTask()
         return;
     }
 
-    if (editingViewModel_ == &targetViewModel && editingRow_ == row)
+    if (editingViewModel_ == &targetViewModel &&
+        editingTaskId_ == task.id)
     {
         cancelEditing();
     }
@@ -1269,6 +1672,15 @@ void TaskQueueWidget::showTableContextMenu(
 
     QMenu menu(this);
     QAction* editAction = menu.addAction(QStringLiteral("수정"));
+    QAction* copyAction =
+        menu.addAction(QStringLiteral("퀘스트 정보 복사"));
+    QAction* duplicateAction =
+        menu.addAction(QStringLiteral("새 퀘스트로 복제"));
+    QAction* reopenAction = nullptr;
+    if (table == completedTable_)
+    {
+        reopenAction = menu.addAction(QStringLiteral("진행 중으로 복원"));
+    }
     QAction* deleteAction = menu.addAction(QStringLiteral("삭제"));
 
     QAction* selectedAction =
@@ -1276,6 +1688,18 @@ void TaskQueueWidget::showTableContextMenu(
     if (editAction != nullptr && selectedAction == editAction)
     {
         startEditing();
+    }
+    else if (selectedAction == copyAction)
+    {
+        copySelectedTaskToClipboard();
+    }
+    else if (selectedAction == duplicateAction)
+    {
+        duplicateSelectedTask();
+    }
+    else if (reopenAction != nullptr && selectedAction == reopenAction)
+    {
+        reopenSelectedTask();
     }
     else if (selectedAction == deleteAction)
     {
@@ -1309,7 +1733,7 @@ void TaskQueueWidget::openTaskFromFloatingWidget(int row, bool edit)
 void TaskQueueWidget::addTaskFromFloatingWidget()
 {
     showFromTray();
-    if (editingRow_ >= 0)
+    if (editingTaskId_ != 0)
     {
         cancelEditing();
     }
@@ -1405,6 +1829,41 @@ Task TaskQueueWidget::selectedTask() const
     return pendingViewModel_.taskAt(row);
 }
 
+QString TaskQueueWidget::uniqueCopyTitle(const QString& sourceTitle) const
+{
+    const auto titleExists = [this](const QString& candidate) {
+        const std::array<const TaskQueueViewModel*, 2> models{{
+            &pendingViewModel_,
+            &completedViewModel_}};
+        for (const TaskQueueViewModel* model : models)
+        {
+            for (int row = 0; row < model->taskCount(); ++row)
+            {
+                if (model->taskAt(row).title.compare(
+                        candidate,
+                        Qt::CaseInsensitive) == 0)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+
+    const QString baseTitle = sourceTitle.trimmed();
+    QString candidate =
+        QStringLiteral("%1 (복사본)").arg(baseTitle);
+    int copyNumber = 2;
+    while (titleExists(candidate))
+    {
+        candidate =
+            QStringLiteral("%1 (복사본 %2)")
+                .arg(baseTitle)
+                .arg(copyNumber++);
+    }
+    return candidate;
+}
+
 int TaskQueueWidget::selectedPendingRow() const
 {
     if (selectedTable_ == pendingPreviewTable_ &&
@@ -1449,7 +1908,7 @@ void TaskQueueWidget::updateSelectedTaskDetails()
         return;
     }
 
-    if (editingRow_ < 0)
+    if (editingTaskId_ == 0)
     {
         workTabs_->setCurrentIndex(1);
     }
@@ -1600,10 +2059,17 @@ void TaskQueueWidget::updateUiState()
             .arg(overdue));
 
     const bool hasPendingSelection = selectedPendingRow() >= 0;
+    const bool hasCompletedSelection =
+        selectedTable_ == completedTable_ &&
+        completedTable_->selectionModel()->hasSelection();
     const bool hasAnySelection =
         selectedTable_ != nullptr &&
         selectedTable_->selectionModel()->hasSelection();
-    completeButton_->setEnabled(hasPendingSelection);
+    completeButton_->setText(
+        hasCompletedSelection
+            ? QStringLiteral("진행 중으로 복원")
+            : QStringLiteral("선택 퀘스트 완료"));
+    completeButton_->setEnabled(hasPendingSelection || hasCompletedSelection);
     editButton_->setVisible(hasAnySelection);
     editButton_->setEnabled(hasAnySelection);
 }
@@ -1614,6 +2080,7 @@ QString TaskQueueWidget::summaryText(
 {
     const QDate today = QDate::currentDate();
     QStringList received;
+    QStringList inProgress;
     QStringList due;
     QStringList overdue;
     QStringList completed;
@@ -1621,6 +2088,8 @@ QString TaskQueueWidget::summaryText(
     for (int row = 0; row < pendingViewModel_.taskCount(); ++row)
     {
         const Task task = pendingViewModel_.taskAt(row);
+        inProgress.append(QStringLiteral("- %1").arg(task.title));
+
         const QDate createdDate = task.createdAt.date();
         if (createdDate.isValid() &&
             createdDate >= rangeStart &&
@@ -1688,10 +2157,11 @@ QString TaskQueueWidget::summaryText(
     };
 
     return QStringLiteral(
-        "퀘스트 요약 (%1 ~ %2)\n\n%3\n\n%4\n\n%5\n\n%6")
+        "퀘스트 요약 (%1 ~ %2)\n\n%3\n\n%4\n\n%5\n\n%6\n\n%7")
         .arg(rangeStart.toString(QStringLiteral("yyyy.MM.dd")))
         .arg(rangeEnd.toString(QStringLiteral("yyyy.MM.dd")))
         .arg(sectionText(QStringLiteral("[접수]"), received))
+        .arg(sectionText(QStringLiteral("[현재 진행 중]"), inProgress))
         .arg(sectionText(QStringLiteral("[마감 예정]"), due))
         .arg(sectionText(QStringLiteral("[지연 퀘스트]"), overdue))
         .arg(sectionText(QStringLiteral("[완료]"), completed));

@@ -68,6 +68,11 @@ bool TaskRepository::initialize()
         return false;
     }
 
+    if (!configureDatabase() || !verifyDatabaseIntegrity())
+    {
+        return false;
+    }
+
     if (!executeSchema(QStringLiteral(
             "CREATE TABLE IF NOT EXISTS tasks ("
             "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -297,6 +302,31 @@ bool TaskRepository::completeTask(qint64 taskId)
     return true;
 }
 
+bool TaskRepository::reopenTask(qint64 taskId)
+{
+    QSqlQuery query(database_);
+    query.prepare(QStringLiteral(
+        "UPDATE tasks SET status = 'pending', completed_at = NULL "
+        "WHERE id = :id AND status = 'completed'"));
+    query.bindValue(QStringLiteral(":id"), taskId);
+
+    if (!query.exec())
+    {
+        lastError_ = QStringLiteral("퀘스트 복원 상태를 저장하지 못했습니다: %1")
+                         .arg(query.lastError().text());
+        return false;
+    }
+
+    if (query.numRowsAffected() != 1)
+    {
+        lastError_ = QStringLiteral("복원할 완료 퀘스트를 찾지 못했습니다.");
+        return false;
+    }
+
+    lastError_.clear();
+    return true;
+}
+
 bool TaskRepository::deleteTask(qint64 taskId)
 {
     QSqlQuery query(database_);
@@ -367,6 +397,43 @@ bool TaskRepository::executeSchema(const QString& sql)
     return true;
 }
 
+bool TaskRepository::configureDatabase()
+{
+    QSqlQuery query(database_);
+    if (!query.exec(QStringLiteral("PRAGMA busy_timeout = 5000")))
+    {
+        lastError_ = QStringLiteral(
+                         "DB 잠금 대기 시간을 설정하지 못했습니다: %1")
+                         .arg(query.lastError().text());
+        return false;
+    }
+    return true;
+}
+
+bool TaskRepository::verifyDatabaseIntegrity()
+{
+    QSqlQuery query(database_);
+    if (!query.exec(QStringLiteral("PRAGMA quick_check(1)")) ||
+        !query.next())
+    {
+        lastError_ = QStringLiteral(
+                         "DB 무결성을 확인하지 못했습니다: %1")
+                         .arg(query.lastError().text());
+        return false;
+    }
+
+    const QString result = query.value(0).toString();
+    if (result.compare(QStringLiteral("ok"), Qt::CaseInsensitive) != 0)
+    {
+        lastError_ = QStringLiteral(
+                         "DB 파일이 손상되었을 수 있습니다: %1")
+                         .arg(result);
+        return false;
+    }
+
+    return true;
+}
+
 bool TaskRepository::ensureTitleColumn()
 {
     QSqlQuery columnQuery(database_);
@@ -389,17 +456,41 @@ bool TaskRepository::ensureTitleColumn()
 
     if (hasTitleColumn)
     {
-        return true;
+        return executeSchema(QStringLiteral(
+            "UPDATE tasks SET title = description "
+            "WHERE title = '' AND description <> ''"));
+    }
+
+    if (!database_.transaction())
+    {
+        setLastDatabaseError(
+            QStringLiteral("제목 컬럼 마이그레이션을 시작하지 못했습니다."));
+        return false;
     }
 
     if (!executeSchema(QStringLiteral(
             "ALTER TABLE tasks ADD COLUMN title TEXT NOT NULL DEFAULT ''")))
     {
+        database_.rollback();
         return false;
     }
 
-    return executeSchema(QStringLiteral(
-        "UPDATE tasks SET title = description WHERE title = ''"));
+    if (!executeSchema(QStringLiteral(
+            "UPDATE tasks SET title = description WHERE title = ''")))
+    {
+        database_.rollback();
+        return false;
+    }
+
+    if (!database_.commit())
+    {
+        setLastDatabaseError(
+            QStringLiteral("제목 컬럼 마이그레이션을 완료하지 못했습니다."));
+        database_.rollback();
+        return false;
+    }
+
+    return true;
 }
 
 bool TaskRepository::ensureExternalUrlColumn()

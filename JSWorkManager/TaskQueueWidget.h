@@ -45,6 +45,9 @@ private:
     void startEditing();
     void cancelEditing();
     void completeSelectedTask();
+    void reopenSelectedTask();
+    void duplicateSelectedTask();
+    void copySelectedTaskToClipboard();
     void deleteSelectedTask();
     void handleTableSelection(QTableView* source);
     void showTableContextMenu(QTableView* table, const QPoint& position);
@@ -54,6 +57,7 @@ private:
     void setImportance(int importance);
     void setEditingUi(bool editing);
     Task selectedTask() const;
+    QString uniqueCopyTitle(const QString& sourceTitle) const;
     int selectedPendingRow() const;
     void updateSelectedTaskDetails();
     void updateUiState();
@@ -94,8 +98,9 @@ private:
     QLabel* selectedMetaLabel_ = nullptr;
     QPushButton* externalLinkButton_ = nullptr;
     QString selectedExternalUrl_;
-    int editingRow_ = -1;
+    qint64 editingTaskId_ = 0;
     TaskQueueViewModel* editingViewModel_ = nullptr;
+    QTableView* editingTable_ = nullptr;
     QSystemTrayIcon* trayIcon_ = nullptr;
     QueueFloatingWidget* floatingQueueWidget_ = nullptr;
     QAction* floatingQueueAction_ = nullptr;

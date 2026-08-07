@@ -5,6 +5,7 @@
 #include <QtCore/QItemSelectionModel>
 #include <QtCore/QSortFilterProxyModel>
 #include <QtGui/QCloseEvent>
+#include <QtGui/QHelpEvent>
 #include <QtGui/QMouseEvent>
 #include <QtGui/QPainter>
 #include <QtGui/QResizeEvent>
@@ -20,8 +21,10 @@
 #include <QtWidgets/QMenu>
 #include <QtWidgets/QPushButton>
 #include <QtWidgets/QSizeGrip>
+#include <QtWidgets/QStyledItemDelegate>
 #include <QtWidgets/QTableView>
 #include <QtWidgets/QToolButton>
+#include <QtWidgets/QToolTip>
 #include <QtWidgets/QVBoxLayout>
 
 #ifdef Q_OS_WIN
@@ -46,6 +49,38 @@ protected:
         const QModelIndex&) const override
     {
         return sourceRow < 5;
+    }
+};
+
+class TitleToolTipDelegate final : public QStyledItemDelegate
+{
+public:
+    explicit TitleToolTipDelegate(QObject* parent = nullptr)
+        : QStyledItemDelegate(parent)
+    {
+    }
+
+    bool helpEvent(
+        QHelpEvent* event,
+        QAbstractItemView* view,
+        const QStyleOptionViewItem& option,
+        const QModelIndex& index) override
+    {
+        if (event != nullptr &&
+            view != nullptr &&
+            index.isValid() &&
+            event->type() == QEvent::ToolTip)
+        {
+            const QString title = index.data(Qt::DisplayRole).toString();
+            QToolTip::showText(
+                event->globalPos(),
+                title,
+                view->viewport(),
+                option.rect);
+            return true;
+        }
+
+        return QStyledItemDelegate::helpEvent(event, view, option, index);
     }
 };
 
@@ -222,6 +257,9 @@ QueueFloatingWidget::QueueFloatingWidget(
     table_ = new QTableView(this);
     table_->setObjectName(QStringLiteral("floatingQueueTable"));
     table_->setModel(proxyModel);
+    table_->setItemDelegateForColumn(
+        TaskQueueViewModel::TitleColumn,
+        new TitleToolTipDelegate(table_));
     table_->setItemDelegateForColumn(
         TaskQueueViewModel::DeadlineColumn,
         new DeadlineColorDelegate(table_));

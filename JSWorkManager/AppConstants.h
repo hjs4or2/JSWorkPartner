@@ -9,6 +9,11 @@ extern const QString OrganizationName;
 extern const QString ApplicationVersion;
 extern const QString DatabaseFileName;
 
+extern const QString MainWindowGeometryKey;
+extern const QString PendingSortColumnKey;
+extern const QString PendingSortOrderKey;
+extern const QString CompletedSortColumnKey;
+extern const QString CompletedSortOrderKey;
 extern const QString FloatingQueueGeometryKey;
 extern const QString FloatingQueueOpacityKey;
 extern const QString FloatingQueueVisibleKey;

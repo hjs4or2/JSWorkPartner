@@ -35,6 +35,9 @@ public:
         int section,
         Qt::Orientation orientation,
         int role = Qt::DisplayRole) const override;
+    void sort(
+        int column,
+        Qt::SortOrder order = Qt::AscendingOrder) override;
 
     bool loadPendingTasks();
     bool loadCompletedTasks();
@@ -53,7 +56,9 @@ public:
         const QString& deadline);
     bool deleteTask(int row);
     bool completeTask(int row);
+    bool reopenTask(int row);
     Task taskAt(int row) const;
+    int rowForTaskId(qint64 taskId) const;
 
     bool isShowingCompleted() const;
     int taskCount() const;
@@ -68,6 +73,8 @@ private:
     TaskRepository& repository_;
     QList<Task> tasks_;
     bool showingCompleted_ = false;
+    int sortColumn_ = -1;
+    Qt::SortOrder sortOrder_ = Qt::AscendingOrder;
     QString lastMessage_;
     QString lastError_;
 };

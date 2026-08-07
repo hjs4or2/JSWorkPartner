@@ -33,6 +33,7 @@ public:
         const QString& deadline);
     bool deleteTask(qint64 taskId);
     bool completeTask(qint64 taskId);
+    bool reopenTask(qint64 taskId);
     bool titleExists(const QString& title, qint64 excludedTaskId = 0);
 
     QString databasePath() const;
@@ -40,6 +41,8 @@ public:
 
 private:
     bool executeSchema(const QString& sql);
+    bool configureDatabase();
+    bool verifyDatabaseIntegrity();
     bool ensureTitleColumn();
     bool ensureExternalUrlColumn();
     void setLastDatabaseError(const QString& context);

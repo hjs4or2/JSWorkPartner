@@ -32,7 +32,9 @@ public:
         int importance,
         const QString& deadline);
     bool deleteTask(qint64 taskId);
-    bool completeTask(qint64 taskId);
+    bool completeTask(
+        qint64 taskId,
+        const QDateTime& completedAt);
     bool reopenTask(qint64 taskId);
     bool titleExists(const QString& title, qint64 excludedTaskId = 0);
 

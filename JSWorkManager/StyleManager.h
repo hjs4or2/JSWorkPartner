@@ -19,7 +19,7 @@ public:
     void apply(QApplication& application) const;
     void setTheme(QApplication& application, Theme theme) const;
     Theme currentTheme() const;
-    QIcon applicationIcon() const;
+    const QIcon& applicationIcon() const;
 
     StyleManager(const StyleManager&) = delete;
     StyleManager& operator=(const StyleManager&) = delete;
@@ -28,4 +28,5 @@ private:
     StyleManager() = default;
 
     QString styleSheet(Theme theme) const;
+    mutable QIcon applicationIcon_;
 };

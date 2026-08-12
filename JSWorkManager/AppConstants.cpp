@@ -4,7 +4,8 @@ namespace AppConstants
 {
 const QString ApplicationName = QStringLiteral("JSWorkManager");
 const QString OrganizationName = QStringLiteral("JSWorkManager");
-const QString ApplicationVersion = QStringLiteral("1.0.0");
+// 마지막 자리는 1.0.0 릴리스 이후의 리비전 번호입니다.
+const QString ApplicationVersion = QStringLiteral("1.0.0.1");
 const QString DatabaseFileName = QStringLiteral("work_manager.db");
 
 const QString MainWindowGeometryKey =

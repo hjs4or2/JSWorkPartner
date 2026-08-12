@@ -274,7 +274,9 @@ bool TaskRepository::updateTask(
     return true;
 }
 
-bool TaskRepository::completeTask(qint64 taskId)
+bool TaskRepository::completeTask(
+    qint64 taskId,
+    const QDateTime& completedAt)
 {
     QSqlQuery query(database_);
     query.prepare(QStringLiteral(
@@ -282,7 +284,7 @@ bool TaskRepository::completeTask(qint64 taskId)
         "WHERE id = :id AND status = 'pending'"));
     query.bindValue(
         QStringLiteral(":completed_at"),
-        QDateTime::currentDateTime().toString(Qt::ISODate));
+        completedAt.toString(Qt::ISODate));
     query.bindValue(QStringLiteral(":id"), taskId);
 
     if (!query.exec())
@@ -404,6 +406,16 @@ bool TaskRepository::configureDatabase()
     {
         lastError_ = QStringLiteral(
                          "DB 잠금 대기 시간을 설정하지 못했습니다: %1")
+                         .arg(query.lastError().text());
+        return false;
+    }
+
+    // 퀘스트 데이터는 작으므로 SQLite의 기본 약 2 MiB 페이지 캐시보다
+    // 작은 캐시로도 충분합니다. 음수 값은 KiB 단위의 상한입니다.
+    if (!query.exec(QStringLiteral("PRAGMA cache_size = -512")))
+    {
+        lastError_ = QStringLiteral(
+                         "DB 메모리 캐시 크기를 설정하지 못했습니다: %1")
                          .arg(query.lastError().text());
         return false;
     }

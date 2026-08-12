@@ -255,6 +255,13 @@ bool TaskQueueViewModel::addTask(
     int importance,
     const QString& deadline)
 {
+    if (showingCompleted_)
+    {
+        lastError_ = QStringLiteral(
+            "완료 목록에는 새 퀘스트를 직접 추가할 수 없습니다.");
+        return false;
+    }
+
     const QString normalizedTitle = title.trimmed();
     const QString normalizedDetails = details.trimmed();
     const QString normalizedExternalUrl = normalizedHttpUrl(externalUrl);
@@ -306,8 +313,7 @@ bool TaskQueueViewModel::addTask(
         return false;
     }
 
-    showingCompleted_ = false;
-    if (!reload(false))
+    if (!insertTaskSnapshot(createdTask))
     {
         return false;
     }
@@ -333,6 +339,7 @@ bool TaskQueueViewModel::updateTask(
     }
 
     const QString normalizedTitle = title.trimmed();
+    const QString normalizedDetails = details.trimmed();
     const QString normalizedExternalUrl = normalizedHttpUrl(externalUrl);
     const Task task = tasks_.at(row);
     if (normalizedTitle.isEmpty())
@@ -373,7 +380,7 @@ bool TaskQueueViewModel::updateTask(
     if (!repository_.updateTask(
             task.id,
             normalizedTitle,
-            details.trimmed(),
+            normalizedDetails,
             normalizedExternalUrl,
             importance,
             deadline))
@@ -382,9 +389,22 @@ bool TaskQueueViewModel::updateTask(
         return false;
     }
 
-    if (!reload(showingCompleted_))
+    Task& updatedTask = tasks_[row];
+    updatedTask.title = normalizedTitle;
+    updatedTask.details = normalizedDetails;
+    updatedTask.externalUrl = normalizedExternalUrl;
+    updatedTask.importance = importance;
+    updatedTask.deadline = deadline;
+
+    if (sortColumn_ >= 0)
     {
-        return false;
+        sort(sortColumn_, sortOrder_);
+    }
+    else
+    {
+        emit dataChanged(
+            index(row, 0),
+            index(row, ColumnCount - 1));
     }
 
     lastMessage_ = QStringLiteral("%1번 퀘스트를 수정했습니다.")
@@ -393,7 +413,7 @@ bool TaskQueueViewModel::updateTask(
     return true;
 }
 
-bool TaskQueueViewModel::completeTask(int row)
+bool TaskQueueViewModel::completeTask(int row, Task* transitionedTask)
 {
     if (showingCompleted_)
     {
@@ -407,16 +427,22 @@ bool TaskQueueViewModel::completeTask(int row)
         return false;
     }
 
-    const Task task = tasks_.at(row);
-    if (!repository_.completeTask(task.id))
+    Task task = tasks_.at(row);
+    task.completed = true;
+    task.completedAt = QDateTime::currentDateTime();
+    if (!repository_.completeTask(task.id, task.completedAt))
     {
         lastError_ = repository_.lastError();
         return false;
     }
 
-    if (!reload(false))
+    beginRemoveRows(QModelIndex(), row, row);
+    tasks_.removeAt(row);
+    endRemoveRows();
+
+    if (transitionedTask != nullptr)
     {
-        return false;
+        *transitionedTask = task;
     }
 
     lastMessage_ = QStringLiteral("%1번 퀘스트를 완료했습니다.")
@@ -425,7 +451,7 @@ bool TaskQueueViewModel::completeTask(int row)
     return true;
 }
 
-bool TaskQueueViewModel::reopenTask(int row)
+bool TaskQueueViewModel::reopenTask(int row, Task* transitionedTask)
 {
     if (!showingCompleted_)
     {
@@ -439,16 +465,22 @@ bool TaskQueueViewModel::reopenTask(int row)
         return false;
     }
 
-    const Task task = tasks_.at(row);
+    Task task = tasks_.at(row);
     if (!repository_.reopenTask(task.id))
     {
         lastError_ = repository_.lastError();
         return false;
     }
 
-    if (!reload(true))
+    task.completed = false;
+    task.completedAt = QDateTime();
+    beginRemoveRows(QModelIndex(), row, row);
+    tasks_.removeAt(row);
+    endRemoveRows();
+
+    if (transitionedTask != nullptr)
     {
-        return false;
+        *transitionedTask = task;
     }
 
     lastMessage_ = QStringLiteral("%1번 퀘스트를 진행 중으로 복원했습니다.")
@@ -472,10 +504,9 @@ bool TaskQueueViewModel::deleteTask(int row)
         return false;
     }
 
-    if (!reload(showingCompleted_))
-    {
-        return false;
-    }
+    beginRemoveRows(QModelIndex(), row, row);
+    tasks_.removeAt(row);
+    endRemoveRows();
 
     lastMessage_ = QStringLiteral("%1번 퀘스트를 삭제했습니다.")
                        .arg(task.sequence);
@@ -486,6 +517,43 @@ bool TaskQueueViewModel::deleteTask(int row)
 Task TaskQueueViewModel::taskAt(int row) const
 {
     return row >= 0 && row < tasks_.size() ? tasks_.at(row) : Task();
+}
+
+bool TaskQueueViewModel::insertTaskSnapshot(const Task& task)
+{
+    if (task.completed != showingCompleted_)
+    {
+        lastError_ = QStringLiteral("퀘스트 상태와 대상 목록이 일치하지 않습니다.");
+        return false;
+    }
+
+    if (rowForTaskId(task.id) >= 0)
+    {
+        lastError_ = QStringLiteral("목록에 같은 퀘스트가 이미 있습니다.");
+        return false;
+    }
+
+    int insertionRow = tasks_.size();
+    if (sortColumn_ < 0)
+    {
+        while (insertionRow > 0 &&
+               tasks_.at(insertionRow - 1).sequence > task.sequence)
+        {
+            --insertionRow;
+        }
+    }
+
+    beginInsertRows(QModelIndex(), insertionRow, insertionRow);
+    tasks_.insert(insertionRow, task);
+    endInsertRows();
+
+    if (sortColumn_ >= 0)
+    {
+        sort(sortColumn_, sortOrder_);
+    }
+
+    lastError_.clear();
+    return true;
 }
 
 int TaskQueueViewModel::rowForTaskId(qint64 taskId) const

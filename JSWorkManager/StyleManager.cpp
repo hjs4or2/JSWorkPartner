@@ -52,8 +52,13 @@ StyleManager::Theme StyleManager::currentTheme() const
                : Theme::Light;
 }
 
-QIcon StyleManager::applicationIcon() const
+const QIcon& StyleManager::applicationIcon() const
 {
+    if (!applicationIcon_.isNull())
+    {
+        return applicationIcon_;
+    }
+
     QPixmap pixmap(64, 64);
     pixmap.fill(Qt::transparent);
 
@@ -84,7 +89,8 @@ QIcon StyleManager::applicationIcon() const
         painter.drawLine(QPointF(32, y), QPointF(44, y));
     }
 
-    return QIcon(pixmap);
+    applicationIcon_ = QIcon(pixmap);
+    return applicationIcon_;
 }
 
 QString StyleManager::styleSheet(Theme theme) const

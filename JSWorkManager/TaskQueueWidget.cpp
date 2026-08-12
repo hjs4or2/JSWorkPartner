@@ -1470,13 +1470,15 @@ void TaskQueueWidget::cancelEditing()
 void TaskQueueWidget::completeSelectedTask()
 {
     const int row = selectedPendingRow();
-    if (!pendingViewModel_.completeTask(row))
+    Task completedTask;
+    if (!pendingViewModel_.completeTask(row, &completedTask))
     {
         showViewModelError();
         return;
     }
 
-    if (!completedViewModel_.loadCompletedTasks())
+    if (!completedViewModel_.insertTaskSnapshot(completedTask) &&
+        !completedViewModel_.loadCompletedTasks())
     {
         showViewModelError();
         return;
@@ -1499,13 +1501,15 @@ void TaskQueueWidget::reopenSelectedTask()
     }
 
     const int row = completedTable_->currentIndex().row();
-    if (!completedViewModel_.reopenTask(row))
+    Task reopenedTask;
+    if (!completedViewModel_.reopenTask(row, &reopenedTask))
     {
         showViewModelError();
         return;
     }
 
-    if (!pendingViewModel_.loadPendingTasks())
+    if (!pendingViewModel_.insertTaskSnapshot(reopenedTask) &&
+        !pendingViewModel_.loadPendingTasks())
     {
         showViewModelError();
         return;

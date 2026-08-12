@@ -55,9 +55,10 @@ public:
         int importance,
         const QString& deadline);
     bool deleteTask(int row);
-    bool completeTask(int row);
-    bool reopenTask(int row);
+    bool completeTask(int row, Task* transitionedTask = nullptr);
+    bool reopenTask(int row, Task* transitionedTask = nullptr);
     Task taskAt(int row) const;
+    bool insertTaskSnapshot(const Task& task);
     int rowForTaskId(qint64 taskId) const;
 
     bool isShowingCompleted() const;

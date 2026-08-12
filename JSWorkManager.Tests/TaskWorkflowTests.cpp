@@ -209,10 +209,13 @@ int main(int argc, char* argv[])
                 gamma.deadline.isEmpty(),
             QStringLiteral("수정 결과 확인"));
 
+        Task completedGamma;
         test.verify(
-            pending.completeTask(gammaRow),
+            pending.completeTask(gammaRow, &completedGamma),
             QStringLiteral("진행 퀘스트 완료 처리"));
-        test.verify(completed.loadCompletedTasks(), QStringLiteral("완료 목록 갱신"));
+        test.verify(
+            completed.insertTaskSnapshot(completedGamma),
+            QStringLiteral("완료 목록에 메모리 내 이동"));
         test.verify(
             pending.taskCount() == 1 && completed.taskCount() == 1,
             QStringLiteral("완료 처리 후 목록 이동"));
@@ -222,16 +225,25 @@ int main(int argc, char* argv[])
             completedGammaRow >= 0 &&
                 completed.taskAt(completedGammaRow).completedAt.isValid(),
             QStringLiteral("완료 시각 기록"));
+        Task reopenedGamma;
         test.verify(
-            completed.reopenTask(completedGammaRow),
+            completed.reopenTask(completedGammaRow, &reopenedGamma),
             QStringLiteral("완료 퀘스트 진행 중으로 복원"));
-        test.verify(pending.loadPendingTasks(), QStringLiteral("복원 후 진행 목록 갱신"));
+        test.verify(
+            pending.insertTaskSnapshot(reopenedGamma),
+            QStringLiteral("진행 목록에 메모리 내 이동"));
         test.verify(
             pending.taskCount() == 2 && completed.taskCount() == 0,
             QStringLiteral("복원 후 목록 이동"));
         test.verify(
             !pending.taskAt(pending.rowForTaskId(alpha.id)).completedAt.isValid(),
             QStringLiteral("복원 시 완료 시각 초기화"));
+
+        TaskQueueViewModel persistedPending(repository);
+        test.verify(
+            persistedPending.loadPendingTasks() &&
+                persistedPending.taskCount() == 2,
+            QStringLiteral("메모리 내 이동 후 DB 상태 유지"));
 
         const int betaRow = pending.rowForTaskId(betaId);
         test.verify(betaRow >= 0, QStringLiteral("삭제 대상 ID 탐색"));

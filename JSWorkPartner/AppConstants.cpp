@@ -1,11 +1,15 @@
 #include "AppConstants.h"
 
+#include "GeneratedVersion.h"
+
 namespace AppConstants
 {
-const QString ApplicationName = QStringLiteral("JSWorkManager");
-const QString OrganizationName = QStringLiteral("JSWorkManager");
-// 마지막 자리는 1.0.0 릴리스 이후의 리비전 번호입니다.
-const QString ApplicationVersion = QStringLiteral("1.0.0.1");
+const QString ApplicationName = QStringLiteral("JSWorkPartner");
+const QString OrganizationName = QStringLiteral("JSWorkPartner");
+// Keep the existing data and settings identifiers for migration compatibility.
+const QString LegacyApplicationName = QStringLiteral("JSWorkManager");
+const QString LegacyOrganizationName = QStringLiteral("JSWorkManager");
+const QString ApplicationVersion = QStringLiteral(JSWORKPARTNER_VERSION);
 const QString DatabaseFileName = QStringLiteral("work_manager.db");
 
 const QString MainWindowGeometryKey =
@@ -32,6 +36,7 @@ const QString LegacyRedmineProjectIdKey =
 const QString LegacyRedmineProjectNameKey =
     QStringLiteral("redmine/projectName");
 
+// Share the mutex with the previous product to prevent concurrent C++ instances.
 const wchar_t* const SingleInstanceMutexName =
     L"Local\\JSWorkManager.SingleInstance.0A88D32A";
 }

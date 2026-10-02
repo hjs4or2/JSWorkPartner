@@ -1,4 +1,4 @@
-# JSWorkManager
+# JSWorkPartner
 
 Windows용 퀘스트 관리 애플리케이션입니다.
 
@@ -32,9 +32,24 @@ Windows용 퀘스트 관리 애플리케이션입니다.
 
 ## Redmine 연동
 
-1. JSWorkManager의 `Settings...`에서 Redmine 도메인 주소를 입력합니다.
+1. JSWorkPartner의 `Settings...`에서 Redmine 도메인 주소를 입력합니다.
 2. 퀘스트 제목이나 상세 설명에 `#3333`처럼 일감 번호를 작성합니다.
 3. 퀘스트 상세 화면에서 해당 번호를 클릭하면 Redmine 일감이 열립니다.
+
+## 구현 버전
+
+- `JSWorkPartner`: 기존 C++17 + Qt 애플리케이션
+- `JSWorkPartner.CSharp`: 동일한 SQLite DB를 사용하는 C# + WPF 애플리케이션
+
+두 버전은 `JSWORKPARTNER_DATA_DIR` 환경 변수를 우선 사용하고, 값이 없으면
+기존 `JSWORKMANAGER_DATA_DIR` 값을 사용합니다. 두 변수 모두 없으면 기존
+`%APPDATA%\JSWorkManager\JSWorkManager\work_manager.db` 경로를 그대로 사용해
+이름 변경 후에도 기존 데이터를 이어서 사용할 수 있습니다.
+
+C++ 버전은 기존 Qt 설정을 새 제품의 설정에 없는 항목만 가져옵니다.
+이전 C++ 버전과의 중복 실행을 막는 Mutex 식별자도 유지합니다.
+같은 DB 파일을 사용할 수 있지만, 편집 충돌을 피하려면 한 번에 한 버전에서
+작업하는 것을 권장합니다.
 
 ## 개발 환경
 
@@ -42,12 +57,28 @@ Windows용 퀘스트 관리 애플리케이션입니다.
 - Qt 5.9.9
 - Visual Studio 2022
 - SQLite
+- .NET 8 SDK 대상 및 WPF (C# 버전)
+- Windows 내장 SQLite(`winsqlite3.dll`, C# 버전에서 사용)
 
-`JSWorkManager.sln`을 Visual Studio에서 열어 x64 구성으로 빌드할 수 있습니다.
+C# 버전에는 외부 NuGet 패키지가 필요하지 않습니다. Windows 10/11에 포함된
+SQLite 엔진을 사용하므로 별도 라이브러리 설치 없이 빌드할 수 있습니다.
+
+`JSWorkPartner.sln`을 Visual Studio에서 열어 x64 구성으로 빌드할 수 있습니다.
+
+C# 버전만 명령줄에서 빌드하고 실행하려면 다음 명령을 사용합니다.
+
+```powershell
+dotnet build .\JSWorkPartner.CSharp\JSWorkPartner.CSharp.csproj
+dotnet run --project .\JSWorkPartner.CSharp\JSWorkPartner.CSharp.csproj
+```
+
+표시 버전의 마지막 자리는 `Release 1.0.0` 이후 `origin/main`에 반영된
+커밋 수로 빌드 시 자동 생성됩니다. 예를 들어 세 커밋이 푸시된 상태에서
+빌드하면 버전은 `1.0.0.3`으로 표시됩니다.
 
 ## 자동 테스트
 
-솔루션의 `JSWorkManager.Tests` 프로젝트는 운영 데이터와 분리된 임시 SQLite
+솔루션의 `JSWorkPartner.Tests` 프로젝트는 운영 데이터와 분리된 임시 SQLite
 DB에서 다음 흐름을 검증합니다.
 
 - 퀘스트 등록과 입력값 정규화
@@ -62,8 +93,16 @@ DB에서 다음 흐름을 검증합니다.
 Release x64로 솔루션을 빌드한 뒤 다음 파일을 실행합니다.
 
 ```powershell
-.\Output\Tests\Release\JSWorkManager.Tests.exe
+.\Output\Tests\Release\JSWorkPartner.Tests.exe
 ```
 
 모든 검증이 성공하면 종료 코드 `0`과
 `All task workflow tests passed.`가 출력됩니다.
+
+C# 버전의 동일한 핵심 흐름 테스트는 다음과 같이 실행합니다.
+
+```powershell
+dotnet run --project .\JSWorkPartner.CSharp.Tests\JSWorkPartner.CSharp.Tests.csproj
+```
+
+성공 시 `All C# task workflow tests passed.`가 출력됩니다.

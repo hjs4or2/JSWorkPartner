@@ -34,14 +34,27 @@ TaskRepository::~TaskRepository()
 
 bool TaskRepository::initialize()
 {
+    const QProcessEnvironment environment =
+        QProcessEnvironment::systemEnvironment();
     QString dataDirectory =
-        QProcessEnvironment::systemEnvironment().value(
-            QStringLiteral("JSWORKMANAGER_DATA_DIR"));
-
+        environment.value(QStringLiteral("JSWORKPARTNER_DATA_DIR"));
     if (dataDirectory.isEmpty())
     {
         dataDirectory =
-            QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+            environment.value(QStringLiteral("JSWORKMANAGER_DATA_DIR"));
+    }
+
+    if (dataDirectory.isEmpty())
+    {
+        // Retain the existing DB location after the product name changes.
+        const QString baseDirectory =
+            QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+        if (!baseDirectory.isEmpty())
+        {
+            dataDirectory = QDir(baseDirectory).filePath(
+                AppConstants::LegacyOrganizationName + QStringLiteral("/") +
+                AppConstants::LegacyApplicationName);
+        }
     }
 
     if (dataDirectory.isEmpty())

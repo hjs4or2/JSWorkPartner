@@ -13,8 +13,8 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{7F2D353C-1988-4B31-9653-F3A740B9554E}</ProjectGuid>
     <Keyword>QtVS_v304</Keyword>
-    <RootNamespace>JSWorkManagerTests</RootNamespace>
-    <QtMsBuild Condition="'$(QtMsBuild)'=='' OR !Exists('$(QtMsBuild)\qt.targets')">$(MSBuildProjectDirectory)\..\JSWorkManager\QtMsBuild</QtMsBuild>
+    <RootNamespace>JSWorkPartnerTests</RootNamespace>
+    <QtMsBuild Condition="'$(QtMsBuild)'=='' OR !Exists('$(QtMsBuild)\qt.targets')">$(MSBuildProjectDirectory)\..\JSWorkPartner\QtMsBuild</QtMsBuild>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -67,7 +67,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\JSWorkManager;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IntDir);$(ProjectDir)..\JSWorkPartner;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
@@ -78,7 +78,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\JSWorkManager;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IntDir);$(ProjectDir)..\JSWorkPartner;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <Optimization>MaxSpeed</Optimization>
@@ -94,16 +94,19 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="TaskWorkflowTests.cpp" />
-    <ClCompile Include="..\JSWorkManager\AppConstants.cpp" />
-    <ClCompile Include="..\JSWorkManager\TaskQueueViewModel.cpp" />
-    <ClCompile Include="..\JSWorkManager\TaskRepository.cpp" />
+    <ClCompile Include="..\JSWorkPartner\AppConstants.cpp" />
+    <ClCompile Include="..\JSWorkPartner\TaskQueueViewModel.cpp" />
+    <ClCompile Include="..\JSWorkPartner\TaskRepository.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\JSWorkManager\AppConstants.h" />
-    <ClInclude Include="..\JSWorkManager\Task.h" />
-    <ClInclude Include="..\JSWorkManager\TaskQueueViewModel.h" />
-    <ClInclude Include="..\JSWorkManager\TaskRepository.h" />
+    <ClInclude Include="..\JSWorkPartner\AppConstants.h" />
+    <ClInclude Include="..\JSWorkPartner\Task.h" />
+    <ClInclude Include="..\JSWorkPartner\TaskQueueViewModel.h" />
+    <ClInclude Include="..\JSWorkPartner\TaskRepository.h" />
   </ItemGroup>
+  <Target Name="GenerateVersionHeader" BeforeTargets="ClCompile">
+    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(SolutionDir)scripts\GenerateVersion.ps1&quot; -RepositoryRoot &quot;$(SolutionDir).&quot; -OutputPath &quot;$(IntDir)GeneratedVersion.h&quot;" />
+  </Target>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">
     <Import Project="$(QtMsBuild)\qt.targets" />

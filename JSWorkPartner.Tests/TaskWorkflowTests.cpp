@@ -90,7 +90,7 @@ bool createLegacyDatabase(
 int main(int argc, char* argv[])
 {
     QCoreApplication application(argc, argv);
-    QCoreApplication::setApplicationName(QStringLiteral("JSWorkManager.Tests"));
+    QCoreApplication::setApplicationName(QStringLiteral("JSWorkPartner.Tests"));
 
     TestContext test;
     QTemporaryDir dataDirectory;
@@ -101,7 +101,7 @@ int main(int argc, char* argv[])
     }
 
     qputenv(
-        "JSWORKMANAGER_DATA_DIR",
+        "JSWORKPARTNER_DATA_DIR",
         dataDirectory.path().toUtf8());
 
     {
@@ -267,7 +267,7 @@ int main(int argc, char* argv[])
             createLegacyDatabase(legacyDatabasePath),
             QStringLiteral("이전 버전 DB 생성"));
         qputenv(
-            "JSWORKMANAGER_DATA_DIR",
+            "JSWORKPARTNER_DATA_DIR",
             legacyDataDirectory.path().toUtf8());
 
         TaskRepository legacyRepository;
@@ -301,7 +301,7 @@ int main(int argc, char* argv[])
             corruptFileCreated,
             QStringLiteral("손상된 DB 파일 준비"));
         qputenv(
-            "JSWORKMANAGER_DATA_DIR",
+            "JSWORKPARTNER_DATA_DIR",
             corruptDataDirectory.path().toUtf8());
 
         TaskRepository corruptRepository;
@@ -324,7 +324,7 @@ int main(int argc, char* argv[])
             createLegacyDatabase(interruptedDatabasePath, true),
             QStringLiteral("빈 제목 컬럼이 남은 DB 생성"));
         qputenv(
-            "JSWORKMANAGER_DATA_DIR",
+            "JSWORKPARTNER_DATA_DIR",
             interruptedMigrationDirectory.path().toUtf8());
 
         TaskRepository repairedRepository;

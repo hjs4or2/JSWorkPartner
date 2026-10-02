@@ -6,6 +6,8 @@ namespace AppConstants
 {
 extern const QString ApplicationName;
 extern const QString OrganizationName;
+extern const QString LegacyApplicationName;
+extern const QString LegacyOrganizationName;
 extern const QString ApplicationVersion;
 extern const QString DatabaseFileName;
 

@@ -1144,7 +1144,7 @@ void TaskQueueWidget::showSettingsDialog()
                 QStandardPaths::writableLocation(
                     QStandardPaths::DocumentsLocation);
             const QString suggestedName =
-                QStringLiteral("JSWorkManager-backup-%1.db")
+                QStringLiteral("JSWorkPartner-backup-%1.db")
                     .arg(QDateTime::currentDateTime().toString(
                         QStringLiteral("yyyyMMdd-HHmmss")));
             const QString suggestedPath =

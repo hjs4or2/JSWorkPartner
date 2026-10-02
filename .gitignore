@@ -36,3 +36,19 @@ enc_temp_folder/
 # OS files
 .DS_Store
 Thumbs.db
+
+# C# build output and migration-local temporary files
+**/bin/
+**/obj/
+/tmp/
+
+# Local database sidecars and environment secrets
+*.db-wal
+*.db-shm
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+.env
+.env.*
+!.env.example

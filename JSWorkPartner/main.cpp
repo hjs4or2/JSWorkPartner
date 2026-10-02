@@ -19,6 +19,19 @@ int main(int argc, char* argv[])
     QApplication::setApplicationDisplayName(AppConstants::ApplicationName);
 
     QSettings settings;
+    QSettings legacySettings(
+        AppConstants::LegacyOrganizationName,
+        AppConstants::LegacyApplicationName);
+    for (const QString& key : legacySettings.allKeys())
+    {
+        if (!settings.contains(key))
+        {
+            settings.setValue(key, legacySettings.value(key));
+        }
+    }
+    legacySettings.remove(AppConstants::LegacyRedmineApiKeyKey);
+    legacySettings.remove(AppConstants::LegacyRedmineProjectIdKey);
+    legacySettings.remove(AppConstants::LegacyRedmineProjectNameKey);
     settings.remove(AppConstants::LegacyRedmineApiKeyKey);
     settings.remove(AppConstants::LegacyRedmineProjectIdKey);
     settings.remove(AppConstants::LegacyRedmineProjectNameKey);

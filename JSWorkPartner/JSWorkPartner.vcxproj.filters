@@ -23,6 +23,15 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="WeeklyReportSettings.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="WeeklyReportCollector.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="WeeklyReportDialog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="AppConstants.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -49,6 +58,15 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="WeeklyReportSettings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="WeeklyReportCollector.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="WeeklyReportDialog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="AppConstants.h">
       <Filter>Header Files</Filter>
     </ClInclude>

@@ -39,13 +39,13 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'" Label="QtSettings">
     <QtInstall Condition="Exists('C:\Qt\Qt5.9.9\5.9.9\msvc2015_64')">C:\Qt\Qt5.9.9\5.9.9\msvc2015_64</QtInstall>
     <QtInstall Condition="'$(QtInstall)' == ''">QT599</QtInstall>
-    <QtModules>core;gui;widgets;sql</QtModules>
+    <QtModules>core;gui;widgets;sql;network</QtModules>
     <QtBuildConfig>debug</QtBuildConfig>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'" Label="QtSettings">
     <QtInstall Condition="Exists('C:\Qt\Qt5.9.9\5.9.9\msvc2015_64')">C:\Qt\Qt5.9.9\5.9.9\msvc2015_64</QtInstall>
     <QtInstall Condition="'$(QtInstall)' == ''">QT599</QtInstall>
-    <QtModules>core;gui;widgets;sql</QtModules>
+    <QtModules>core;gui;widgets;sql;network</QtModules>
     <QtBuildConfig>release</QtBuildConfig>
   </PropertyGroup>
   <Target Name="QtMsBuildNotFound"
@@ -75,6 +75,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'" Label="Configuration">
     <ClCompile>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <AdditionalIncludeDirectories>$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -85,10 +86,12 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>Crypt32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'" Label="Configuration">
     <ClCompile>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <AdditionalIncludeDirectories>$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -99,6 +102,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>false</GenerateDebugInformation>
+      <AdditionalDependencies>Crypt32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>"$(QtInstall)\bin\windeployqt.exe" --release --no-translations --compiler-runtime "$(TargetPath)"
@@ -115,6 +119,9 @@ if exist "$(VCInstallDir)Redist\MSVC\$(VCToolsRedistVersion)\x64\Microsoft.VC143
     <ClCompile Include="TaskQueueViewModel.cpp" />
     <ClCompile Include="TaskQueueWidget.cpp" />
     <ClCompile Include="TaskRepository.cpp" />
+    <ClCompile Include="WeeklyReportSettings.cpp" />
+    <ClCompile Include="WeeklyReportCollector.cpp" />
+    <ClCompile Include="WeeklyReportDialog.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AppConstants.h" />
@@ -126,6 +133,9 @@ if exist "$(VCInstallDir)Redist\MSVC\$(VCToolsRedistVersion)\x64\Microsoft.VC143
     <ClInclude Include="TaskQueueViewModel.h" />
     <ClInclude Include="TaskQueueWidget.h" />
     <ClInclude Include="TaskRepository.h" />
+    <ClInclude Include="WeeklyReportSettings.h" />
+    <ClInclude Include="WeeklyReportCollector.h" />
+    <ClInclude Include="WeeklyReportDialog.h" />
   </ItemGroup>
   <Target Name="GenerateVersionHeader" BeforeTargets="ClCompile">
     <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(SolutionDir)scripts\GenerateVersion.ps1&quot; -RepositoryRoot &quot;$(SolutionDir).&quot; -OutputPath &quot;$(IntDir)GeneratedVersion.h&quot;" />

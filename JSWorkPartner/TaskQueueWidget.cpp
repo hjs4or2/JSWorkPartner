@@ -7,6 +7,7 @@
 #include "AppConstants.h"
 #include "NullableDateEdit.h"
 #include "QueueFloatingWidget.h"
+#include "WeeklyReportDialog.h"
 #include <QtCore/QCoreApplication>
 #include <QtCore/QDate>
 #include <QtCore/QDir>
@@ -595,6 +596,15 @@ TaskQueueWidget::TaskQueueWidget(
         new QPushButton(QStringLiteral("목록 보기"), weeklySummaryCard);
     weeklySummaryListButton->setFixedHeight(30);
     weeklySummaryHeaderLayout->addWidget(weeklySummaryListButton);
+    auto* weeklyReportButton =
+        new QPushButton(QStringLiteral("업무 보고서"), weeklySummaryCard);
+    weeklyReportButton->setFixedHeight(30);
+    weeklySummaryHeaderLayout->addWidget(weeklyReportButton);
+    connect(weeklyReportButton, &QPushButton::clicked, this, [this]() {
+        WeeklyReportDialog dialog(this);
+        dialog.exec();
+        updateSelectedTaskDetails();
+    });
 
     weeklySummaryLayout->addLayout(weeklySummaryHeaderLayout);
     weeklySummaryLayout->addWidget(weeklySummaryLabel_);
@@ -1097,6 +1107,16 @@ void TaskQueueWidget::showSettingsDialog()
     layout->addWidget(redmineSettingsLabel);
     layout->addLayout(redmineForm);
     layout->addWidget(redmineDescriptionLabel);
+    auto* weeklyReportSettingsButton =
+        new QPushButton(QStringLiteral("주간업무 보고서 설정 (API key / workspace, 별도 저장)..."), &dialog);
+    layout->addWidget(weeklyReportSettingsButton);
+    connect(weeklyReportSettingsButton, &QPushButton::clicked, &dialog, [this, &dialog, redmineUrlEdit]() {
+        if (WeeklyReportDialog::showSettings(&dialog))
+        {
+            redmineUrlEdit->setText(QSettings().value(AppConstants::RedmineUrlKey).toString());
+            updateSelectedTaskDetails();
+        }
+    });
     layout->addSpacing(12);
     layout->addWidget(dataPathLabel);
     layout->addLayout(dataPathLayout);

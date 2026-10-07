@@ -28,16 +28,7 @@ namespace
 {
 const QString SecretKey = QStringLiteral("weeklyReport/apiKeyDpapi");
 const QString SecretServerKey = QStringLiteral("weeklyReport/apiKeyServer");
-
-QString normalizedUrl(QString value)
-{
-    value = value.trimmed();
-    if (!value.isEmpty() && !value.contains(QStringLiteral("://")))
-        value.prepend(QStringLiteral("https://"));
-    while (value.endsWith(QLatin1Char('/')))
-        value.chop(1);
-    return value;
-}
+const QString AllowHttpKey = QStringLiteral("weeklyReport/allowHttp");
 
 QByteArray protect(QByteArray input, bool encrypt, bool* ok)
 {
@@ -63,11 +54,34 @@ QByteArray protect(QByteArray input, bool encrypt, bool* ok)
 }
 }
 
+QString WeeklyReportSettings::normalizeServerUrl(QString value)
+{
+    value = value.trimmed();
+    if (!value.isEmpty() && !value.contains(QStringLiteral("://")))
+        value.prepend(QStringLiteral("https://"));
+    while (value.endsWith(QLatin1Char('/')))
+        value.chop(1);
+    return value;
+}
+
+QString WeeklyReportSettings::serverError(const QString& server, bool allowHttp)
+{
+    const QUrl parsed(server, QUrl::StrictMode);
+    if (!parsed.isValid() || parsed.host().isEmpty() ||
+        (parsed.scheme() != QStringLiteral("https") && parsed.scheme() != QStringLiteral("http")) ||
+        parsed.authority().contains(QLatin1Char('@')) || parsed.hasQuery() || parsed.hasFragment())
+        return QStringLiteral("인증정보·쿼리·fragment 없는 HTTP 또는 HTTPS 주소를 입력하세요.");
+    if (parsed.scheme() == QStringLiteral("http") && !allowHttp)
+        return QStringLiteral("HTTP는 기본 차단됩니다. 평문 전송 안내를 확인하고 'HTTP 평문 전송 허용'을 선택하세요.");
+    return {};
+}
+
 WeeklyReportSettings WeeklyReportSettings::load()
 {
     QSettings settings;
     WeeklyReportSettings result;
-    result.redmineUrl = normalizedUrl(settings.value(AppConstants::RedmineUrlKey).toString());
+    result.redmineUrl = normalizeServerUrl(settings.value(AppConstants::RedmineUrlKey).toString());
+    result.allowHttp = settings.value(AllowHttpKey, false).toBool();
     result.displayName = settings.value(QStringLiteral("weeklyReport/displayName")).toString();
     const int size = settings.beginReadArray(QStringLiteral("weeklyReport/workspaces"));
     for (int i = 0; i < size; ++i)
@@ -89,7 +103,7 @@ QString WeeklyReportSettings::apiKey(const QString& server, QString* error)
     const QByteArray encrypted = settings.value(SecretKey).toByteArray();
     if (encrypted.isEmpty())
         return {};
-    if (normalizedUrl(settings.value(SecretServerKey).toString()) != normalizedUrl(server))
+    if (normalizeServerUrl(settings.value(SecretServerKey).toString()) != normalizeServerUrl(server))
     {
         *error = QStringLiteral("Redmine 주소가 변경되었습니다. 보고서 설정에서 API key를 다시 입력하세요.");
         return {};
@@ -112,13 +126,20 @@ bool WeeklyReportSettings::edit(QWidget* parent)
     auto* layout = new QVBoxLayout(&dialog);
     auto* form = new QFormLayout;
     auto* url = new QLineEdit(original.redmineUrl, &dialog);
+    auto* allowHttp = new QCheckBox(QStringLiteral("HTTP 평문 전송 허용"), &dialog);
+    allowHttp->setChecked(original.allowHttp);
+    auto* transportHint = new QLabel(QStringLiteral(
+        "기본은 HTTPS입니다. HTTP를 허용하면 API key와 업무 내용이 암호화되지 않고 전송됩니다."), &dialog);
+    transportHint->setWordWrap(true);
     auto* name = new QLineEdit(original.displayName, &dialog);
     name->setPlaceholderText(QStringLiteral("비워 두면 현재 API 계정의 이름 사용"));
     auto* key = new QLineEdit(&dialog);
     key->setEchoMode(QLineEdit::Password);
     key->setPlaceholderText(QStringLiteral("새 key 입력 / 비우면 기존 보호된 key 유지"));
     auto* removeKey = new QCheckBox(QStringLiteral("저장된 API key 삭제"), &dialog);
-    form->addRow(QStringLiteral("Redmine HTTPS 주소"), url);
+    form->addRow(QStringLiteral("Redmine 주소"), url);
+    form->addRow(QString(), allowHttp);
+    form->addRow(QString(), transportHint);
     form->addRow(QStringLiteral("보고서 이름"), name);
     form->addRow(QStringLiteral("API key (Windows DPAPI)"), key);
     form->addRow(QString(), removeKey);
@@ -172,12 +193,11 @@ bool WeeklyReportSettings::edit(QWidget* parent)
     });
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&]() {
-        const QString server = normalizedUrl(url->text());
-        const QUrl parsed(server);
-        if (!server.isEmpty() && (!parsed.isValid() || parsed.scheme() != QStringLiteral("https") ||
-            parsed.host().isEmpty() || !parsed.userInfo().isEmpty() || parsed.hasQuery() || parsed.hasFragment()))
+        const QString server = normalizeServerUrl(url->text());
+        const QString addressError = serverError(server, allowHttp->isChecked());
+        if (!server.isEmpty() && !addressError.isEmpty())
         {
-            QMessageBox::warning(&dialog, QStringLiteral("주소 확인"), QStringLiteral("API key 보호를 위해 인증정보·쿼리 없는 HTTPS 주소를 입력하세요."));
+            QMessageBox::warning(&dialog, QStringLiteral("주소 확인"), addressError);
             return;
         }
         QVector<ReportWorkspace> workspaces;
@@ -220,12 +240,13 @@ bool WeeklyReportSettings::edit(QWidget* parent)
             }
         }
         else if (!removeKey->isChecked() && settings.contains(SecretKey) &&
-                 normalizedUrl(settings.value(SecretServerKey).toString()) != server)
+                 normalizeServerUrl(settings.value(SecretServerKey).toString()) != server)
         {
             QMessageBox::warning(&dialog, QStringLiteral("API key 확인"), QStringLiteral("서버 변경 시 새 API key를 입력하거나 저장된 key 삭제를 선택하세요."));
             return;
         }
         settings.setValue(AppConstants::RedmineUrlKey, server);
+        settings.setValue(AllowHttpKey, allowHttp->isChecked());
         settings.setValue(QStringLiteral("weeklyReport/displayName"), name->text().trimmed());
         settings.beginWriteArray(QStringLiteral("weeklyReport/workspaces"), workspaces.size());
         for (int i = 0; i < workspaces.size(); ++i)

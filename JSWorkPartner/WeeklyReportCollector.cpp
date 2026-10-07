@@ -278,19 +278,27 @@ void WeeklyReportCollector::request(const QString& path, const QStringList& quer
 void WeeklyReportCollector::collectRedmine()
 {
     if (!running_) return;
+    settings_.redmineUrl = WeeklyReportSettings::normalizeServerUrl(settings_.redmineUrl);
+    const QString addressError = WeeklyReportSettings::serverError(settings_.redmineUrl, settings_.allowHttp);
+    if (!addressError.isEmpty())
+    {
+        result_.partial = true;
+        result_.notices.append(QStringLiteral("Redmine 미수집: %1 차주 후보는 조회되지 않았습니다.").arg(addressError));
+        finish();
+        return;
+    }
     QString error;
     apiKey_ = WeeklyReportSettings::apiKey(settings_.redmineUrl, &error);
     if (!error.isEmpty()) result_.notices.append(error);
     const QUrl server(settings_.redmineUrl);
-    if (apiKey_.isEmpty() || server.scheme() != QStringLiteral("https") || server.host().isEmpty() ||
-        !server.userInfo().isEmpty() || server.hasQuery() || server.hasFragment())
+    if (apiKey_.isEmpty())
     {
         result_.partial = true;
-        result_.notices.append(QStringLiteral("Redmine 미수집: 보고서 설정에서 HTTPS 주소와 API key를 확인하세요. 차주 후보는 조회되지 않았습니다."));
+        result_.notices.append(QStringLiteral("Redmine 미수집: 보고서 설정에서 주소와 API key를 확인하세요. 차주 후보는 조회되지 않았습니다."));
         finish();
         return;
     }
-    if (!QSslSocket::supportsSsl())
+    if (server.scheme() == QStringLiteral("https") && !QSslSocket::supportsSsl())
     {
         result_.partial = true;
         result_.notices.append(QStringLiteral("Redmine 미수집: Qt의 TLS 런타임을 사용할 수 없습니다. 이 Qt 배포본과 호환되는 TLS 라이브러리 설정이 필요합니다. 차주 후보는 조회되지 않았습니다."));

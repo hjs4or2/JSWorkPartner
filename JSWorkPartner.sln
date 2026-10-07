@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JSWorkPartner.CSharp", "JSW
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JSWorkPartner.CSharp.Tests", "JSWorkPartner.CSharp.Tests\JSWorkPartner.CSharp.Tests.csproj", "{89939EF6-1596-48BD-BEEF-A730C6B16731}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JSWorkPartner.Mcp", "JSWorkPartner.Mcp\JSWorkPartner.Mcp.csproj", "{D7EC72B1-7D1D-4B02-90AE-2FB77EC12D1F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -23,6 +25,16 @@ Global
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D7EC72B1-7D1D-4B02-90AE-2FB77EC12D1F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D7EC72B1-7D1D-4B02-90AE-2FB77EC12D1F}.Debug|x64.Build.0 = Debug|Any CPU
+		{D7EC72B1-7D1D-4B02-90AE-2FB77EC12D1F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D7EC72B1-7D1D-4B02-90AE-2FB77EC12D1F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D7EC72B1-7D1D-4B02-90AE-2FB77EC12D1F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D7EC72B1-7D1D-4B02-90AE-2FB77EC12D1F}.Release|x64.ActiveCfg = Release|Any CPU
+		{D7EC72B1-7D1D-4B02-90AE-2FB77EC12D1F}.Release|x64.Build.0 = Release|Any CPU
+		{D7EC72B1-7D1D-4B02-90AE-2FB77EC12D1F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D7EC72B1-7D1D-4B02-90AE-2FB77EC12D1F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D7EC72B1-7D1D-4B02-90AE-2FB77EC12D1F}.Release|x86.ActiveCfg = Release|Any CPU
 		{5784E5A5-5F77-4DC4-8715-4DD149AC48EB}.Debug|x64.ActiveCfg = Debug|x64
 		{5784E5A5-5F77-4DC4-8715-4DD149AC48EB}.Debug|x64.Build.0 = Debug|x64
 		{5784E5A5-5F77-4DC4-8715-4DD149AC48EB}.Debug|Any CPU.ActiveCfg = Debug|x64

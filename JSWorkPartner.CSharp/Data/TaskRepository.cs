@@ -4,12 +4,17 @@ using JSWorkPartner.CSharp.Models;
 
 namespace JSWorkPartner.CSharp.Data;
 
-public sealed class TaskRepository
+public sealed partial class TaskRepository
 {
     private const string DatabaseFileName = "work_manager.db";
 
-    public TaskRepository(string? databasePath = null) =>
+    private readonly bool _allowCreate;
+
+    public TaskRepository(string? databasePath = null, bool allowCreate = true)
+    {
         DatabasePath = databasePath ?? GetDefaultDatabasePath();
+        _allowCreate = allowCreate;
+    }
 
     public string DatabasePath { get; }
 
@@ -79,6 +84,22 @@ public sealed class TaskRepository
         database.Execute("BEGIN IMMEDIATE");
         try
         {
+            if (TitleExists(database, title, 0))
+                throw new InvalidOperationException("같은 제목의 업무가 이미 있습니다.");
+            var task = InsertTask(database, title, details, externalUrl, importance, deadline);
+            database.Execute("COMMIT");
+            return task;
+        }
+        catch
+        {
+            try { database.Execute("ROLLBACK"); } catch { }
+            throw;
+        }
+    }
+
+    private static TaskItem InsertTask(NativeSqlite database, string title, string details,
+        string? externalUrl, int importance, string? deadline)
+    {
             long sequence;
             using (var sequenceStatement = database.Prepare(
                        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM tasks"))
@@ -103,36 +124,42 @@ public sealed class TaskRepository
                 statement.ExecuteNonQuery();
             }
             var id = database.LastInsertRowId;
-            database.Execute("COMMIT");
             return new TaskItem
             {
                 Id = id, Sequence = sequence, Title = title, Details = details,
                 ExternalUrl = externalUrl, Importance = importance, Deadline = deadline,
                 CreatedAt = createdAt
             };
-        }
-        catch
-        {
-            try { database.Execute("ROLLBACK"); } catch { }
-            throw;
-        }
     }
 
     public void UpdateTask(long id, string title, string details, string? externalUrl,
         int importance, string? deadline)
     {
         using var database = Open();
-        using var statement = database.Prepare("""
-            UPDATE tasks SET title = ?, description = ?, external_url = ?, importance = ?, deadline = ?
-             WHERE id = ?
-            """);
-        statement.Bind(1, title);
-        statement.Bind(2, details);
-        statement.Bind(3, externalUrl);
-        statement.Bind(4, importance);
-        statement.Bind(5, deadline);
-        statement.Bind(6, id);
-        ExecuteForSingleRow(database, statement, "수정할 퀘스트를 찾지 못했습니다.");
+        database.Execute("BEGIN IMMEDIATE");
+        try
+        {
+            if (TitleExists(database, title, id))
+                throw new InvalidOperationException(
+                    "같은 제목의 퀘스트가 이미 있습니다. 다른 제목을 입력해 주세요.");
+            using var statement = database.Prepare("""
+                UPDATE tasks SET title = ?, description = ?, external_url = ?, importance = ?, deadline = ?
+                 WHERE id = ?
+                """);
+            statement.Bind(1, title);
+            statement.Bind(2, details);
+            statement.Bind(3, externalUrl);
+            statement.Bind(4, importance);
+            statement.Bind(5, deadline);
+            statement.Bind(6, id);
+            ExecuteForSingleRow(database, statement, "수정할 퀘스트를 찾지 못했습니다.");
+            database.Execute("COMMIT");
+        }
+        catch
+        {
+            try { database.Execute("ROLLBACK"); } catch { }
+            throw;
+        }
     }
 
     public void CompleteTask(long id, DateTimeOffset completedAt)
@@ -165,14 +192,19 @@ public sealed class TaskRepository
     public bool TitleExists(string title, long excludedId = 0)
     {
         using var database = Open();
+        return TitleExists(database, title.Trim(), excludedId);
+    }
+
+    private static bool TitleExists(NativeSqlite database, string title, long excludedId)
+    {
         using var statement = database.Prepare(
             "SELECT 1 FROM tasks WHERE title = ? COLLATE NOCASE AND id <> ? LIMIT 1");
-        statement.Bind(1, title.Trim());
+        statement.Bind(1, title);
         statement.Bind(2, excludedId);
         return statement.Step();
     }
 
-    private NativeSqlite Open() => new(DatabasePath);
+    private NativeSqlite Open() => new(DatabasePath, _allowCreate);
 
     private static void ExecuteForSingleRow(NativeSqlite database,
         NativeSqlite.Statement statement, string missingMessage)

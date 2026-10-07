@@ -57,10 +57,18 @@
 
 #include "StyleManager.h"
 #include "TaskQueueViewModel.h"
+#include "ExternalTaskWatcher.h"
 #include "Task.h"
 
 namespace
 {
+bool sameEditableTask(const Task& left, const Task& right)
+{
+    return left.id == right.id && left.sequence == right.sequence && left.title == right.title &&
+        left.details == right.details && left.externalUrl == right.externalUrl &&
+        left.importance == right.importance && left.deadline == right.deadline && left.completed == right.completed;
+}
+
 QString normalizedRedmineUrl(const QString& value)
 {
     QString normalized = value.trimmed();
@@ -602,6 +610,12 @@ TaskQueueWidget::TaskQueueWidget(
     weeklySummaryHeaderLayout->addWidget(weeklyReportButton);
     connect(weeklyReportButton, &QPushButton::clicked, this, [this]() {
         WeeklyReportDialog dialog(this);
+        dialog.setLocalTaskProvider([this]() {
+            QList<Task> tasks;
+            for (int row = 0; row < completedViewModel_.taskCount(); ++row)
+                tasks.append(completedViewModel_.taskAt(row));
+            return tasks;
+        });
         dialog.exec();
         updateSelectedTaskDetails();
     });
@@ -766,6 +780,22 @@ TaskQueueWidget::TaskQueueWidget(
     });
     deadlineRefreshTimer->start();
 
+    externalWatcher_ = new ExternalTaskWatcher(pendingViewModel_.databasePath(), this);
+    const auto locallyChanged = [this]() {
+        if (!applyingExternal_) externalWatcher_->requestRefresh();
+    };
+    for (auto* model : {&pendingViewModel_, &completedViewModel_})
+    {
+        connect(model, &QAbstractItemModel::modelReset, this, locallyChanged);
+        connect(model, &QAbstractItemModel::rowsInserted, this, locallyChanged);
+        connect(model, &QAbstractItemModel::rowsRemoved, this, locallyChanged);
+        connect(model, &QAbstractItemModel::dataChanged, this, locallyChanged);
+    }
+    auto* externalRefreshTimer = new QTimer(this);
+    externalRefreshTimer->setInterval(100);
+    connect(externalRefreshTimer, &QTimer::timeout, this, [this]() { refreshExternalTasks(); });
+    externalWatcher_->start();
+    externalRefreshTimer->start();
     setupTrayIcon();
     updateUiState();
     updateSelectedTaskDetails();
@@ -774,6 +804,8 @@ TaskQueueWidget::TaskQueueWidget(
 
 TaskQueueWidget::~TaskQueueWidget()
 {
+    delete externalWatcher_;
+    externalWatcher_ = nullptr;
     QSettings settings;
     settings.setValue(
         AppConstants::MainWindowGeometryKey,
@@ -787,6 +819,42 @@ TaskQueueWidget::~TaskQueueWidget()
         delete floatingQueueWidget_;
         floatingQueueWidget_ = nullptr;
     }
+}
+
+void TaskQueueWidget::refreshExternalTasks()
+{
+    if (!externalWatcher_) return;
+    // Popup actions may hold a row index until exec() returns (including the floating board).
+    if (QApplication::activePopupWidget()) return;
+    ExternalTaskWatcher::Snapshot snapshot;
+    if (!externalWatcher_->takeSnapshot(&snapshot)) return;
+    if (!snapshot.error.isEmpty())
+    {
+        statusLabel_->setText(snapshot.error);
+        return;
+    }
+    const qint64 selectedId = selectedTask().id;
+    QTableView* const previousTable = selectedTable_;
+    const int activeTab = workTabs_->currentIndex();
+    applyingExternal_ = true;
+    pendingViewModel_.applySnapshot(snapshot.pending);
+    completedViewModel_.applySnapshot(snapshot.completed);
+    selectedTable_ = nullptr;
+    int row = pendingViewModel_.rowForTaskId(selectedId);
+    if (selectedId && row >= 0)
+    {
+        selectedTable_ = previousTable == pendingFullTable_ ? pendingFullTable_ : pendingPreviewTable_;
+        selectedTable_->selectRow(row);
+    }
+    else if (selectedId && (row = completedViewModel_.rowForTaskId(selectedId)) >= 0)
+    {
+        selectedTable_ = completedTable_;
+        completedTable_->selectRow(row);
+    }
+    applyingExternal_ = false;
+    updateSelectedTaskDetails();
+    updateUiState();
+    workTabs_->setCurrentIndex(activeTab);
 }
 
 void TaskQueueWidget::showInitialView()
@@ -1352,9 +1420,13 @@ void TaskQueueWidget::addTask()
         wasEditing ? savedViewModel->rowForTaskId(editedTaskId) : -1;
     if (wasEditing && editedRow < 0)
     {
-        cancelEditing();
         statusLabel_->setText(
-            QStringLiteral("수정 중인 퀘스트를 찾을 수 없습니다."));
+            QStringLiteral("업무가 다른 곳에서 변경되었거나 삭제되었습니다. 입력 내용은 유지됩니다. 취소 후 다시 선택하세요."));
+        return;
+    }
+    if (wasEditing && !sameEditableTask(editingOriginal_, savedViewModel->taskAt(editedRow)))
+    {
+        statusLabel_->setText(QStringLiteral("업무가 다른 곳에서 변경되었습니다. 입력 내용은 유지됩니다. 취소 후 최신 내용을 확인하세요."));
         return;
     }
     const QDate selectedDeadline = deadlineInput_->nullableDate();
@@ -1441,6 +1513,7 @@ void TaskQueueWidget::startEditing()
     }
 
     editingTaskId_ = task.id;
+    editingOriginal_ = task;
     editingViewModel_ = targetViewModel;
     editingTable_ = selectedTable_;
     titleInput_->setText(task.title);
@@ -1652,10 +1725,16 @@ void TaskQueueWidget::deleteSelectedTask()
         return;
     }
 
-    const bool deletingCompleted = selectedTable_ == completedTable_;
-    const int row = deletingCompleted
-                        ? completedTable_->currentIndex().row()
-                        : selectedPendingRow();
+    // The confirmation dialog runs a nested event loop; resolve the captured ID again.
+    const int pendingRow = pendingViewModel_.rowForTaskId(task.id);
+    const int completedRow = completedViewModel_.rowForTaskId(task.id);
+    if (pendingRow < 0 && completedRow < 0)
+    {
+        statusLabel_->setText(QStringLiteral("업무가 이미 삭제되었습니다. 목록을 확인하세요."));
+        return;
+    }
+    const bool deletingCompleted = pendingRow < 0;
+    const int row = deletingCompleted ? completedRow : pendingRow;
     TaskQueueViewModel& targetViewModel =
         deletingCompleted ? completedViewModel_ : pendingViewModel_;
 
@@ -1779,6 +1858,7 @@ void TaskQueueWidget::completeTaskFromFloatingWidget(int row)
 
 void TaskQueueWidget::handleTableSelection(QTableView* source)
 {
+    if (applyingExternal_) return;
     if (source->selectionModel()->hasSelection())
     {
         selectedTable_ = source;
@@ -2255,6 +2335,13 @@ void TaskQueueWidget::showWeeklySummaryList()
             summaryEdit->setPlainText(
                 summaryText(startDateEdit->date(), endDateEdit->date()));
         };
+    for (auto* model : {&pendingViewModel_, &completedViewModel_})
+    {
+        connect(model, &QAbstractItemModel::modelReset, &dialog, refreshSummary);
+        connect(model, &QAbstractItemModel::rowsInserted, &dialog, refreshSummary);
+        connect(model, &QAbstractItemModel::rowsRemoved, &dialog, refreshSummary);
+        connect(model, &QAbstractItemModel::dataChanged, &dialog, refreshSummary);
+    }
     const auto applyPreset =
         [periodCombo,
          startDateEdit,

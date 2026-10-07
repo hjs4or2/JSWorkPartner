@@ -3,6 +3,7 @@
 #include <array>
 
 #include <QtWidgets/QWidget>
+#include "Task.h"
 
 class QCloseEvent;
 class QAction;
@@ -20,6 +21,7 @@ class QSystemTrayIcon;
 class NullableDateEdit;
 class QueueFloatingWidget;
 class TaskQueueViewModel;
+class ExternalTaskWatcher;
 struct Task;
 
 class TaskQueueWidget final : public QWidget
@@ -66,6 +68,7 @@ private:
         const QDate& rangeEnd) const;
     void showWeeklySummaryList();
     void showViewModelError();
+    void refreshExternalTasks();
 
     TaskQueueViewModel& pendingViewModel_;
     TaskQueueViewModel& completedViewModel_;
@@ -105,4 +108,7 @@ private:
     QueueFloatingWidget* floatingQueueWidget_ = nullptr;
     QAction* floatingQueueAction_ = nullptr;
     bool trayHintShown_ = false;
+    ExternalTaskWatcher* externalWatcher_ = nullptr;
+    bool applyingExternal_ = false;
+    Task editingOriginal_;
 };

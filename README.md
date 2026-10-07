@@ -106,3 +106,11 @@ dotnet run --project .\JSWorkPartner.CSharp.Tests\JSWorkPartner.CSharp.Tests.csp
 ```
 
 성공 시 `All C# task workflow tests passed.`가 출력됩니다.
+
+## 대화로 로컬 업무 관리(MCP)
+
+`JSWorkPartner.Mcp`는 업무 추가·조회·완료용 독립 stdio 서버입니다. 공식 C# MCP SDK 의존성을 고정하고 기존 저장소 소스를 공유합니다. 게시 실행 파일, 필수 DB 경로 설정, 기본 dry-run 등록 스크립트, 도구 사용법과 격리 검증 기록은 [docs/Mcp.md](docs/Mcp.md)를 참고하세요.
+
+앱 DB 디렉터리는 `JSWORKPARTNER_DATA_DIR` > `JSWORKMANAGER_DATA_DIR` > `%APPDATA%/JSWorkManager/JSWorkManager` 순서로 선택하며 파일명은 `work_manager.db`입니다. MCP 서버와 `scripts/Register-JSWorkPartnerMcp.ps1`에는 기존 DB의 절대 파일 경로를 명시해야 합니다. 등록 스크립트는 `-Database`가 필수이며 `-Apply`를 지정해야 실제 연결을 등록합니다.
+
+외부 업무 변경 감지와 로컬 완료 업무의 주간보고서 반영을 사용하려면 기존 `Output/Release` 앱을 완전히 종료하고 `JSWorkPartner/obj/McpBuild/bin/JSWorkPartner.exe`를 실행하세요. MCP 등록 후 기존 에이전트는 reload 또는 새 세션이 필요합니다. 도구가 반영된 세션에서 `[Updater] 테스트 업무 추가해줘`처럼 요청할 수 있습니다. 이 예시 업무는 실사용 DB에 생성하지 않았습니다.

@@ -1,0 +1,6 @@
+.nuget/
+.dotnet/
+bin/
+obj/
+verification/artifacts/
+verification/__pycache__/

@@ -41,6 +41,7 @@ public:
 
     bool loadPendingTasks();
     bool loadCompletedTasks();
+    void applySnapshot(const QList<Task>& tasks);
     bool addTask(
         const QString& title,
         const QString& details,

@@ -383,7 +383,8 @@ bool TaskQueueViewModel::updateTask(
             normalizedDetails,
             normalizedExternalUrl,
             importance,
-            deadline))
+            deadline,
+            &task))
     {
         lastError_ = repository_.lastError();
         return false;
@@ -605,16 +606,24 @@ void TaskQueueViewModel::refreshDeadlineIndicators()
 
 bool TaskQueueViewModel::reload(bool showCompleted)
 {
-    beginResetModel();
-    showingCompleted_ = showCompleted;
-    tasks_ = repository_.loadTasks(showCompleted);
-    endResetModel();
-
+    const auto tasks = repository_.loadTasks(showCompleted);
     if (!repository_.lastError().isEmpty())
     {
         lastError_ = repository_.lastError();
         return false;
     }
+
+    showingCompleted_ = showCompleted;
+    applySnapshot(tasks);
+    lastError_.clear();
+    return true;
+}
+
+void TaskQueueViewModel::applySnapshot(const QList<Task>& tasks)
+{
+    beginResetModel();
+    tasks_ = tasks;
+    endResetModel();
 
     if (sortColumn_ >= 0)
     {
@@ -622,5 +631,4 @@ bool TaskQueueViewModel::reload(bool showCompleted)
     }
 
     lastError_.clear();
-    return true;
 }

@@ -10,9 +10,12 @@ internal sealed class NativeSqlite : IDisposable
     private const int Done = 101;
     private IntPtr _database;
 
-    public NativeSqlite(string path)
+    public NativeSqlite(string path, bool allowCreate = true)
     {
-        var result = Native.sqlite3_open_v2(Utf8(path), out _database, 0x00000002 | 0x00000004, null);
+        if (!allowCreate && (!System.IO.Path.IsPathFullyQualified(path) || !System.IO.File.Exists(path)))
+            throw new InvalidOperationException("An absolute existing database path is required.");
+        var result = Native.sqlite3_open_v2(Utf8(path), out _database,
+            0x00000002 | (allowCreate ? 0x00000004 : 0), null);
         if (result != Ok)
         {
             var message = ErrorMessage();

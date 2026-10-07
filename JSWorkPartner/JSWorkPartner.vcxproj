@@ -119,6 +119,8 @@ if exist "$(VCInstallDir)Redist\MSVC\$(VCToolsRedistVersion)\x64\Microsoft.VC143
     <ClCompile Include="TaskQueueViewModel.cpp" />
     <ClCompile Include="TaskQueueWidget.cpp" />
     <ClCompile Include="TaskRepository.cpp" />
+    <ClCompile Include="ExternalTaskWatcher.cpp" />
+    <ClCompile Include="LocalTaskReport.cpp" />
     <ClCompile Include="WeeklyReportSettings.cpp" />
     <ClCompile Include="WeeklyReportCollector.cpp" />
     <ClCompile Include="WeeklyReportDialog.cpp" />
@@ -133,6 +135,8 @@ if exist "$(VCInstallDir)Redist\MSVC\$(VCToolsRedistVersion)\x64\Microsoft.VC143
     <ClInclude Include="TaskQueueViewModel.h" />
     <ClInclude Include="TaskQueueWidget.h" />
     <ClInclude Include="TaskRepository.h" />
+    <ClInclude Include="ExternalTaskWatcher.h" />
+    <ClInclude Include="LocalTaskReport.h" />
     <ClInclude Include="WeeklyReportSettings.h" />
     <ClInclude Include="WeeklyReportCollector.h" />
     <ClInclude Include="WeeklyReportDialog.h" />

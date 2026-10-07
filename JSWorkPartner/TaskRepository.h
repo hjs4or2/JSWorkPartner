@@ -30,7 +30,8 @@ public:
         const QString& details,
         const QString& externalUrl,
         int importance,
-        const QString& deadline);
+        const QString& deadline,
+        const Task* expectedTask = nullptr);
     bool deleteTask(qint64 taskId);
     bool completeTask(
         qint64 taskId,

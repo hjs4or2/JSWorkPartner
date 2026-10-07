@@ -12,11 +12,6 @@ public sealed class TaskService(TaskRepository repository)
         int importance, DateTime? deadline)
     {
         var input = Validate(title, details, externalUrl, importance);
-        if (repository.TitleExists(input.Title))
-        {
-            throw new InvalidOperationException(
-                "같은 제목의 퀘스트가 이미 있습니다. 다른 제목을 입력해 주세요.");
-        }
         return repository.AddTask(input.Title, input.Details, input.ExternalUrl,
             importance, ToDeadline(deadline));
     }

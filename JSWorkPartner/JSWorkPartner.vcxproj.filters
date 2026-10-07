@@ -53,6 +53,12 @@
     <ClCompile Include="TaskRepository.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ExternalTaskWatcher.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="LocalTaskReport.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="TaskQueueViewModel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -89,6 +95,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="TaskRepository.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ExternalTaskWatcher.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="LocalTaskReport.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="TaskQueueViewModel.h">

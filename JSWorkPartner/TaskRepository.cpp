@@ -155,6 +155,11 @@ QList<Task> TaskRepository::loadTasks(bool completed)
         tasks.append(task);
     }
 
+    if (query.lastError().isValid())
+    {
+        lastError_ = QStringLiteral("업무 목록을 읽지 못했습니다. 기존 목록을 유지합니다.");
+        return {};
+    }
     lastError_.clear();
     return tasks;
 }
@@ -167,9 +172,17 @@ bool TaskRepository::addTask(
     const QString& deadline,
     Task* createdTask)
 {
-    if (!database_.transaction())
+    QSqlQuery beginQuery(database_);
+    if (!beginQuery.exec(QStringLiteral("BEGIN IMMEDIATE")))
     {
         setLastDatabaseError(QStringLiteral("퀘스트 저장을 시작하지 못했습니다."));
+        return false;
+    }
+
+    if (titleExists(title))
+    {
+        if (lastError_.isEmpty()) lastError_ = QStringLiteral("같은 제목의 업무가 이미 있습니다.");
+        database_.rollback();
         return false;
     }
 
@@ -249,14 +262,44 @@ bool TaskRepository::updateTask(
     const QString& details,
     const QString& externalUrl,
     int importance,
-    const QString& deadline)
+    const QString& deadline,
+    const Task* expectedTask)
 {
+    QSqlQuery beginQuery(database_);
+    if (!beginQuery.exec(QStringLiteral("BEGIN IMMEDIATE")))
+    {
+        setLastDatabaseError(QStringLiteral("퀘스트 수정을 시작하지 못했습니다."));
+        return false;
+    }
+
+    if (titleExists(title, taskId))
+    {
+        if (lastError_.isEmpty()) lastError_ = QStringLiteral("같은 제목의 업무가 이미 있습니다.");
+        database_.rollback();
+        return false;
+    }
+
     QSqlQuery query(database_);
-    query.prepare(QStringLiteral(
+    QString sql = QStringLiteral(
         "UPDATE tasks SET title = :title, description = :description, "
         "external_url = :external_url, importance = :importance, "
         "deadline = :deadline "
-        "WHERE id = :id"));
+        "WHERE id = :id");
+    if (expectedTask)
+        sql += QStringLiteral(" AND sequence=:old_sequence AND title=:old_title "
+            "AND description=:old_details AND COALESCE(external_url,'')=COALESCE(:old_url,'') "
+            "AND importance=:old_importance AND COALESCE(deadline,'')=COALESCE(:old_deadline,'') AND status=:old_status");
+    query.prepare(sql);
+    if (expectedTask)
+    {
+        query.bindValue(QStringLiteral(":old_sequence"), expectedTask->sequence);
+        query.bindValue(QStringLiteral(":old_title"), expectedTask->title);
+        query.bindValue(QStringLiteral(":old_details"), expectedTask->details);
+        query.bindValue(QStringLiteral(":old_url"), expectedTask->externalUrl);
+        query.bindValue(QStringLiteral(":old_importance"), expectedTask->importance);
+        query.bindValue(QStringLiteral(":old_deadline"), expectedTask->deadline);
+        query.bindValue(QStringLiteral(":old_status"), expectedTask->completed ? QStringLiteral("completed") : QStringLiteral("pending"));
+    }
     query.bindValue(QStringLiteral(":title"), title);
     query.bindValue(QStringLiteral(":description"), details);
     query.bindValue(
@@ -274,12 +317,21 @@ bool TaskRepository::updateTask(
     {
         lastError_ = QStringLiteral("퀘스트 수정을 저장하지 못했습니다: %1")
                          .arg(query.lastError().text());
+        database_.rollback();
         return false;
     }
 
     if (query.numRowsAffected() != 1)
     {
         lastError_ = QStringLiteral("수정할 퀘스트를 찾지 못했습니다.");
+        database_.rollback();
+        return false;
+    }
+
+    if (!database_.commit())
+    {
+        setLastDatabaseError(QStringLiteral("퀘스트 수정을 완료하지 못했습니다."));
+        database_.rollback();
         return false;
     }
 
@@ -415,7 +467,7 @@ bool TaskRepository::executeSchema(const QString& sql)
 bool TaskRepository::configureDatabase()
 {
     QSqlQuery query(database_);
-    if (!query.exec(QStringLiteral("PRAGMA busy_timeout = 5000")))
+    if (!query.exec(QStringLiteral("PRAGMA busy_timeout = 150")))
     {
         lastError_ = QStringLiteral(
                          "DB 잠금 대기 시간을 설정하지 못했습니다: %1")

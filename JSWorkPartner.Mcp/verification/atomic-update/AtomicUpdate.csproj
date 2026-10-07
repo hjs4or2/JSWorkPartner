@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../../JSWorkPartner.CSharp/Data/NativeSqlite.cs" Link="Shared/NativeSqlite.cs" />
+    <Compile Include="../../../JSWorkPartner.CSharp/Data/TaskRepository.cs" Link="Shared/TaskRepository.cs" />
+    <Compile Include="../../../JSWorkPartner.CSharp/Models/TaskItem.cs" Link="Shared/TaskItem.cs" />
+    <Compile Include="../../../JSWorkPartner.CSharp/Services/TaskService.cs" Link="Shared/TaskService.cs" />
+    <Compile Include="../../TaskRepository.Mcp.cs" Link="Shared/TaskRepository.Mcp.cs" />
+    <Compile Include="../../TaskToolException.cs" Link="Shared/TaskToolException.cs" />
+  </ItemGroup>
+</Project>

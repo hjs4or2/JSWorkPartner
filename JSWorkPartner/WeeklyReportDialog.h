@@ -2,6 +2,7 @@
 
 #include <QtWidgets/QDialog>
 #include "WeeklyReportCollector.h"
+#include "Task.h"
 
 class QDateEdit;
 class QLabel;
@@ -17,6 +18,7 @@ class WeeklyReportDialog final : public QDialog
 public:
     explicit WeeklyReportDialog(QWidget* parent = nullptr);
     static bool showSettings(QWidget* parent);
+    void setLocalTaskProvider(std::function<QList<Task>()> provider);
 
 protected:
     void reject() override;
@@ -24,6 +26,7 @@ protected:
 
 private:
     void collect();
+    void applyCollectedResult(WeeklyReportResult result);
     void setBusy(bool busy);
     void addLine(QTableWidget* table, const ReportLine& line);
     void refreshPreview();
@@ -56,4 +59,5 @@ private:
     QDate collectedEnd_;
     bool dirty_ = false;
     bool filling_ = false;
+    std::function<QList<Task>()> localTaskProvider_;
 };

@@ -1,4 +1,5 @@
 #include "WeeklyReportDialog.h"
+#include "LocalTaskReport.h"
 
 #include <QtCore/QMap>
 #include <QtCore/QMimeData>
@@ -255,6 +256,12 @@ bool WeeklyReportDialog::showSettings(QWidget* parent)
     return WeeklyReportSettings::edit(parent);
 }
 
+void WeeklyReportDialog::setLocalTaskProvider(std::function<QList<Task>()> provider)
+{
+    localTaskProvider_ = std::move(provider);
+    collectButton_->setToolTip(QStringLiteral("선택한 금주 기간에 완료한 로컬 업무도 초안에 포함합니다. 외부 변경은 다음 초안 생성 시 반영됩니다."));
+}
+
 void WeeklyReportDialog::addLine(QTableWidget* table, const ReportLine& line)
 {
     const bool wasFilling = filling_;
@@ -300,6 +307,11 @@ void WeeklyReportDialog::collect()
     redmineUrl_ = settings.redmineUrl;
     if (settings.workspaces.isEmpty() && settings.redmineUrl.isEmpty())
     {
+        if (localTaskProvider_)
+        {
+            applyCollectedResult({});
+            return;
+        }
         QMessageBox::information(this, QStringLiteral("설정 필요"), QStringLiteral("보고서 설정에서 workspace 또는 Redmine을 먼저 등록하세요. 수동 행은 바로 작성할 수 있습니다."));
         return;
     }
@@ -309,32 +321,41 @@ void WeeklyReportDialog::collect()
     collector_->completed = [this](const WeeklyReportResult& result) {
         auto* finished = collector_;
         collector_ = nullptr;
-        filling_ = true;
-        current_->setRowCount(0);
-        next_->setRowCount(0);
-        for (const auto& line : result.current) addLine(current_, line);
-        for (const auto& line : result.next) addLine(next_, line);
-        filling_ = false;
-        collectedStart_ = currentStart_->date();
-        collectedEnd_ = currentEnd_->date();
-        if (name_->text().trimmed().isEmpty() && !result.apiUserName.isEmpty()) name_->setText(result.apiUserName);
-        notices_->setPlainText(result.notices.join(QStringLiteral("\n\n")));
-        evidence_->clear();
-        dirty_ = true;
-        status_->setText(QStringLiteral("%1 · 금주 %2행 / 차주 후보 %3행. 수집 결과/오류 탭을 확인하고 초안을 편집하세요.")
-            .arg(result.cancelled ? QStringLiteral("수집 취소 (완료된 결과만 반영)") :
-                 result.partial ? QStringLiteral("일부 수집 실패/누락") : QStringLiteral("수집 종료"))
-            .arg(result.current.size()).arg(result.next.size()));
-        setBusy(false);
-        refreshPreview();
+        applyCollectedResult(result);
         finished->deleteLater();
     };
     collector_->start();
 }
 
+void WeeklyReportDialog::applyCollectedResult(WeeklyReportResult result)
+{
+    if (localTaskProvider_)
+        mergeLocalCompletedTasks(result, localTaskProvider_(), currentStart_->date(), currentEnd_->date());
+    filling_ = true;
+    current_->setRowCount(0);
+    next_->setRowCount(0);
+    for (const auto& line : result.current) addLine(current_, line);
+    for (const auto& line : result.next) addLine(next_, line);
+    filling_ = false;
+    collectedStart_ = currentStart_->date();
+    collectedEnd_ = currentEnd_->date();
+    if (name_->text().trimmed().isEmpty() && !result.apiUserName.isEmpty()) name_->setText(result.apiUserName);
+    notices_->setPlainText(result.notices.join(QStringLiteral("\n\n")));
+    evidence_->clear();
+    dirty_ = true;
+    status_->setText(QStringLiteral("%1 · 금주 %2행 / 차주 후보 %3행. 수집 결과/오류 탭을 확인하고 초안을 편집하세요.")
+        .arg(result.cancelled ? QStringLiteral("수집 취소 (완료된 결과만 반영)") :
+             result.partial ? QStringLiteral("일부 수집 실패/누락") : QStringLiteral("수집 종료"))
+        .arg(result.current.size()).arg(result.next.size()));
+    setBusy(false);
+    refreshPreview();
+}
+
 QString WeeklyReportDialog::columnHtml(QTableWidget* table) const
 {
     QMap<QString, QStringList> sections;
+    QMap<QString, QSet<QString>> nonLocalSummaries;
+    QSet<QString> localIds;
     QStringList order;
     for (int row = 0; row < table->rowCount(); ++row)
     {
@@ -343,7 +364,20 @@ QString WeeklyReportDialog::columnHtml(QTableWidget* table) const
         QString section = table->item(row, 0)->text().trimmed();
         if (section.isEmpty()) section = QStringLiteral("기타");
         if (!sections.contains(section)) order.append(section);
-        if (!sections[section].contains(summary)) sections[section].append(summary);
+        QString localId;
+        for (const auto& evidence : table->item(row, 1)->data(Qt::UserRole).toStringList())
+            if (evidence.startsWith(QStringLiteral("local-task:"))) { localId = evidence; break; }
+        if (!localId.isEmpty())
+        {
+            if (localIds.contains(localId)) continue;
+            localIds.insert(localId);
+        }
+        else
+        {
+            if (nonLocalSummaries[section].contains(summary)) continue;
+            nonLocalSummaries[section].insert(summary);
+        }
+        sections[section].append(summary);
     }
     QString html;
     for (const auto& section : order)

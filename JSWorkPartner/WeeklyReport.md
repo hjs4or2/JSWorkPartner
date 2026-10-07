@@ -3,7 +3,7 @@
 ## 사용 흐름
 
 1. 메인 화면의 **이번 주 요약 → 업무 보고서**를 연다. 기존 **목록 보기**는 SQLite 퀘스트 요약으로 유지된다.
-2. **보고서 설정...**에서 Redmine HTTPS 주소, API key, workspace를 등록한다. 메인 **Settings**에서도 같은 설정을 열 수 있다. 보고서 설정은 별도로 저장된다.
+2. **보고서 설정...**에서 Redmine 주소, API key, workspace를 등록한다. 기본은 HTTPS이며 HTTP 서버는 평문 전송 안내를 확인하고 **HTTP 평문 전송 허용**을 선택해야 저장·수집할 수 있다. 메인 **Settings**에서도 같은 설정을 열 수 있다. 보고서 설정은 별도로 저장된다.
 3. 기본 금주/차주는 PC 현지 날짜의 월요일~일요일이다. 보고서 제목 날짜와 이름도 편집할 수 있다. 이름을 비워 두면 수집 시 현재 API 계정 이름을 사용한다.
 4. **이력·이슈 수집 → 초안 만들기**를 누른다. 수집 중에는 취소할 수 있다. 오류/부분 실패는 하단 상태와 **수집 결과 / 오류** 탭에 표시된다.
 5. **초안 편집**에서 섹션과 작업 요약을 수정하고, 차주 후보를 삭제/추가한다. 행을 선택하면 아래에 VCS 원문·폴더·리비전·일시 또는 Redmine 후보 근거가 표시된다. 분석/회의 등은 **수동 행 추가**로 보완한다.
@@ -37,13 +37,14 @@ API key, 이름, 작성자 계정은 코드에 고정하지 않는다. 프로젝
 
 - 보고서 설정은 기존 앱의 `QSettings` 안의 `weeklyReport/*`에 저장하고 Redmine 주소는 기존 `redmine/baseUrl`을 공유한다. SQLite, 공유 DB 스키마 및 저장 위치는 변경하지 않는다.
 - API key는 Windows DPAPI로 암호화한 바이트만 저장한다 (`weeklyReport/apiKeyDpapi`). 현재 Windows 사용자에 묶이고 저장한 서버 주소와도 연결된다. 서버를 바꾸면 새 key를 입력하거나 기존 key를 삭제해야 한다. 다른 Windows 계정으로 설정을 복사하면 복호화가 실패할 수 있다.
-- API key는 URL/쿼리나 오류 로그에 넣지 않고 HTTPS의 `X-Redmine-API-Key` 헤더로만 전송한다. 리디렉션을 따라가지 않고 인증서 오류를 무시하지 않는다. 실패 시 서버 응답 원문/도구 stderr를 출력하지 않는다.
+- API key는 URL/쿼리나 오류 로그에 넣지 않고 `X-Redmine-API-Key` 헤더로만 전송한다. HTTPS가 기본이며 **HTTP 평문 전송 허용**은 기본 false로 `weeklyReport/allowHttp`에 저장한다. HTTP에서는 API key와 업무 내용이 암호화되지 않고 전송된다. 허용 옵션만 바꿔도 다른 서버나 HTTP/HTTPS 간 기존 key를 재사용하지 않으며 새 key 입력 또는 기존 key 삭제가 필요하다.
+- HTTP/HTTPS 외 scheme, host 없는 주소, 주소에 포함된 사용자명/암호·쿼리·fragment는 거부한다. 포트와 Redmine 하위 경로는 유지한다. 리디렉션을 따라가지 않고 HTTPS 인증서 오류를 무시하지 않는다. 자동 HTTPS→HTTP 전환은 없다. 실패 시 서버 응답 원문/도구 stderr를 출력하지 않는다.
 - Redmine 서버의 REST API 활성화, 사용자 이슈/프로젝트 조회 권한, **Git 2.37 이상**의 `git.exe` 및 `svn.exe`의 PATH 등록이 필요하다. HTTPS 조회에는 해당 Qt 5.9.9 배포본이 사용하는 TLS 런타임이 필요하다. 사용할 수 없으면 명시적으로 수집 실패를 표시한다. 빌드의 `windeployqt` 단계는 외부 TLS 라이브러리를 자동 보장하지 않는다.
 - Notion 직접 연동은 포함하지 않는다.
 
 API 규칙: [Redmine Issues REST API](https://www.redmine.org/projects/redmine/wiki/Rest_Issues), [Redmine Users REST API](https://www.redmine.org/projects/redmine/wiki/Rest_Users).
 
-## 이번 변경의 검증 범위
+## 기존 MVP 검증 기록 (HTTP 지원 전)
 
 Qt 5.9.9 / Visual Studio 2022 / C++17 Release x64 제품 빌드는 exit 0으로 성공했다. 기존 Output을 보존하고 obj/WeeklyReportBuild/bin에 출력했다. 정확한 명령·로그·종료 코드는 obj/WeeklyReportReview/fixed-fusion에 보관했다. 마지막 성공 빌드와 현재 제품 소스/프로젝트 25개 SHA256을 대조했다. 상세 결과는 obj/WeeklyReportReview/ReviewStatus.md에 있다.
 
@@ -57,5 +58,16 @@ Windows UI는 17개 assertion 중 15 PASS / 2 FAIL, exit 1이었다. 이슈·미
 
 제품 산출 폴더 TLS probe는 supportsSsl=false, build=OpenSSL 1.0.2t, runtime 빈 문자열이다. 현재 Redmine HTTPS 수집은 차단된다. 조사한 로컬 제품/Qt/도구/Windows/기존 Output 범위에서 호환 libeay32.dll/ssleay32.dll을 찾지 못했다. 해당 Qt 배포본과 맞는 TLS 환경 준비·재확인이 필요하다. DLL 다운로드·설치·배포, 권한 모드·Windows 정책·사용자/시스템 PATH 변경은 하지 않았다.
 
-전체 통과가 아니다. 실서버/인증·권한/HTTPS 종단, 실제 HTML 파일 저장 대화상자, 실제 TaskQueueWidget 상세 링크 UI는 미검증이다. 원본 SQLite·실사용 QSettings·WPF·기존 Output은 변경하지 않았고 기존 테스트 프로젝트도 실행하지 않았다. dev 미커밋 상태를 유지하며 commit/push하지 않았다.
+전체 통과가 아니다. 실서버/인증·권한/HTTPS 종단, 실제 HTML 파일 저장 대화상자, 실제 TaskQueueWidget 상세 링크 UI는 미검증이다. 원본 SQLite·실사용 QSettings·WPF·기존 Output은 변경하지 않았고 기존 테스트 프로젝트도 실행하지 않았다. 이 기록은 기존 MVP 검증 당시 결과이며 이후 `cd7503b`로 커밋했다.
 
+## HTTP 명시 허용 후속 검증
+
+설정에서 **HTTP 평문 전송 허용**을 선택하면 HTTP 서버를 저장하고 수집할 수 있다. HTTPS는 기본 허용이며 HTTP는 옵션이 false일 때 저장·수집을 차단한다. HTTPS에서만 TLS 런타임을 검사하므로 TLS가 없는 환경에서도 명시적으로 허용한 HTTP 수집은 진행한다. HTTP는 API key와 업무 내용의 평문 전송 위험이 있으므로 HTTPS를 우선 사용한다.
+
+이번 변경은 `WeeklyReportSettings.cpp/.h`, `WeeklyReportCollector.cpp`, 이 문서에 한정된다. 실제 제품 클래스를 컴파일해 호출하는 harness·가짜 key·응답·설정과 로그는 `obj/WeeklyReportHttpReview`에 격리했다. 실제 설정 대화상자에서 HTTP 기본 저장 거부, 체크박스와 인라인 안내, 명시 허용 저장/로드, HTTPS 기본 허용, scheme 변경 시 기존 key 재사용 거부를 확인했다. URL의 잘못된 scheme·사용자정보·쿼리·fragment·host 누락·잘못된 포트 등을 거부하고 정상 포트/하위 경로는 보존했다. DPAPI key 복호화와 다른 host/scheme 거절, TLS 없는 HTTP Collector 경로 및 HTTP 이슈 HTML 링크도 확인했다.
+
+최종 관련 harness는 exit 0 / FAILURES=0, timeout 없음이다. 제품 DLL 환경에서 `supportsSsl=false`인 상태로 `127.0.0.1`의 임시 HTTP fixture에 실제 사용자/이슈 요청 3건을 보내고 계획 후보를 수집했다. 키는 헤더에만 전달하고 요청 URL에 포함하지 않는 것을 확인했다. mock request에서 숫자 담당자와 수동 리디렉션 정책도 확인했다. HTTPS는 TLS 런타임 실패로 요청을 보내지 않았으며 HTTP fallback은 없었다. 초기 harness의 생성 헤더 include 누락과 자동응답 타이머 timeout은 테스트 환경을 보완한 뒤 재실행했고 초기 로그도 보존했다.
+
+새 제품 Release x64 빌드는 exit 0이며 실행 파일은 `obj/WeeklyReportHttpBuild/bin/JSWorkPartner.exe`다. 명령·빌드 로그·종료 코드·harness stdout/stderr·소스/실행 파일 해시는 `obj/WeeklyReportHttpReview/results`에 있다. 실행 중인 기존 앱을 종료하거나 기존 Output을 교체하지 않았다.
+
+이 결과는 HTTP 관련 최소 검증만의 결과다. 기존 클립보드 종단 검증 차단과 실서버/HTTPS 종단 미검증 한계는 해소됐다고 주장하지 않는다. 실제 사용자 서버·키·QSettings·DB·클립보드는 사용하지 않았고 외부 서버 접속, 임의 설치, 권한/Windows 정책/시스템 PATH 변경은 하지 않았다. 기존 UI/VCS 테스트 전반은 다시 실행하지 않았다. 후속 변경은 dev 작업 트리에 미커밋 상태로 남기며 commit/push하지 않는다.

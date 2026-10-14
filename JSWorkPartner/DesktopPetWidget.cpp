@@ -11,6 +11,8 @@
 #include <cmath>
 #include <limits>
 
+#include "AppConstants.h"
+
 DesktopPetWidget::DesktopPetWidget(QWidget* parent)
     : QWidget(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::WindowDoesNotAcceptFocus)
 {
@@ -19,8 +21,7 @@ DesktopPetWidget::DesktopPetWidget(QWidget* parent)
     setAttribute(Qt::WA_ShowWithoutActivating);
     setAttribute(Qt::WA_QuitOnClose, false);
     setFocusPolicy(Qt::NoFocus);
-    setAccessibleName(QStringLiteral("로봇 개인비서"));
-    setToolTip(QStringLiteral("클릭해서 대화 · 드래그해서 이동 · 우클릭해서 업무 메뉴"));
+    setDisplayName(AppConstants::PetDefaultName);
     animation_.setInterval(40);
     connect(&animation_, &QTimer::timeout, this, [this] { frame_ = (frame_ + 1) % 10000; update(); });
     const auto constrain = [this] { ensureVisibleOnScreen(); };
@@ -33,6 +34,13 @@ DesktopPetWidget::DesktopPetWidget(QWidget* parent)
 }
 void DesktopPetWidget::setBusy(bool value) { busy_ = value; update(); }
 void DesktopPetWidget::setPendingCount(int value) { pendingCount_ = qMax(0, value); update(); }
+void DesktopPetWidget::setDisplayName(const QString& value)
+{
+    displayName_ = AppConstants::normalizedPetName(value);
+    setAccessibleName(QStringLiteral("%1 개인비서").arg(displayName_));
+    setToolTip(QStringLiteral("<span>%1 · 클릭해서 대화 · 드래그해서 이동 · 우클릭해서 업무 메뉴</span>")
+                   .arg(displayName_.toHtmlEscaped()));
+}
 int DesktopPetWidget::normalizedSizePercent(int value)
 {
     static const int supported[] = {25, 50, 75, 100, 125, 150};

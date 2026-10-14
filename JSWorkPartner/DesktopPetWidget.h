@@ -1,6 +1,7 @@
 #pragma once
 #include <QtWidgets/QWidget>
 #include <QtCore/QTimer>
+#include <QtCore/QString>
 
 class DesktopPetWidget final : public QWidget
 {
@@ -9,6 +10,8 @@ public:
     explicit DesktopPetWidget(QWidget* parent = nullptr);
     void setBusy(bool busy);
     void setPendingCount(int count);
+    void setDisplayName(const QString& displayName);
+    QString displayName() const { return displayName_; }
     void setSizePercent(int percent);
     int sizePercent() const { return sizePercent_; }
     static int normalizedSizePercent(int percent);
@@ -38,6 +41,7 @@ private:
     int frame_ = 0;
     int sizePercent_ = 50;
     int pendingCount_ = 0;
+    QString displayName_;
     bool busy_ = false;
     bool pressed_ = false;
     bool dragging_ = false;

@@ -11,6 +11,7 @@ class PetAssistantPanel final : public QWidget
     Q_OBJECT
 public:
     explicit PetAssistantPanel(QWidget* parent = nullptr);
+    void setDisplayName(const QString& displayName);
     void appendUserMessage(const QString& text);
     void beginAssistantMessage();
     void appendAssistantDelta(const QString& text);
@@ -35,12 +36,15 @@ private:
     void submit();
     void renderMessages();
     void updateInputState();
-    struct Message { QString role; QString text; };
+    enum class MessageRole { User, Assistant };
+    struct Message { MessageRole role; QString text; };
     QList<Message> messages_;
+    QString displayName_;
     int assistantIndex_ = -1;
     bool busy_ = false;
     bool composing_ = false;
     QLabel* connection_ = nullptr;
+    QLabel* nameLabel_ = nullptr;
     QLabel* state_ = nullptr;
     QTextBrowser* history_ = nullptr;
     QPlainTextEdit* input_ = nullptr;

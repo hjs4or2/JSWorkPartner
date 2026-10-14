@@ -1,4 +1,5 @@
 #include "PetAssistantPanel.h"
+#include "AppConstants.h"
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QTextBrowser>
 #include <QtWidgets/QPlainTextEdit>
@@ -7,21 +8,62 @@
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QScrollBar>
 #include <QtWidgets/QStyleOption>
+#include <QtWidgets/QSizePolicy>
 #include <QtGui/QPainter>
+#include <QtGui/QResizeEvent>
+#include <QtGui/QFontMetrics>
 #include <QtGui/QKeyEvent>
 #include <QtGui/QInputMethodEvent>
 #include <QtGui/QScreen>
 #include <QtGui/QGuiApplication>
 
+namespace
+{
+class ElidedNameLabel final : public QLabel
+{
+public:
+    explicit ElidedNameLabel(QWidget* parent)
+        : QLabel(parent)
+    {
+        setMinimumWidth(0);
+        setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        setTextFormat(Qt::PlainText);
+    }
+
+    void setFullText(const QString& text)
+    {
+        fullText_ = text;
+        setAccessibleName(text);
+        setToolTip(QStringLiteral("<span>%1</span>").arg(text.toHtmlEscaped()));
+        updateElidedText();
+    }
+
+protected:
+    void resizeEvent(QResizeEvent* event) override
+    {
+        QLabel::resizeEvent(event);
+        updateElidedText();
+    }
+
+private:
+    void updateElidedText()
+    {
+        QLabel::setText(fontMetrics().elidedText(
+            fullText_, Qt::ElideRight, contentsRect().width()));
+    }
+
+    QString fullText_;
+};
+}
+
 PetAssistantPanel::PetAssistantPanel(QWidget* parent)
     : QWidget(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint)
 {
-    setObjectName(QStringLiteral("petAssistant")); setWindowTitle(QStringLiteral("모아 · 개인비서"));
+    setObjectName(QStringLiteral("petAssistant"));
     setAttribute(Qt::WA_QuitOnClose, false);
     setAttribute(Qt::WA_TranslucentBackground);
     setAttribute(Qt::WA_StyledBackground);
     resize(380, 520); setMinimumSize(340, 440);
-    setAccessibleName(QStringLiteral("모아 개인비서 대화창"));
     setStyleSheet(QStringLiteral(
         "QWidget#petAssistant { background:#f5f9f8; border:1px solid #ccded9; border-radius:16px; }"
         "QLabel { color:#253e47; border:none; background:transparent; }"
@@ -35,10 +77,10 @@ PetAssistantPanel::PetAssistantPanel(QWidget* parent)
     QFont f(QStringLiteral("맑은 고딕")); f.setPointSize(10); setFont(f);
     auto* layout = new QVBoxLayout(this); layout->setContentsMargins(18,18,18,18); layout->setSpacing(12);
     auto* header = new QHBoxLayout;
-    auto* name = new QLabel(QStringLiteral("모아"), this); QFont title = f; title.setPointSize(16); title.setBold(true); name->setFont(title);
+    nameLabel_ = new ElidedNameLabel(this); QFont title = f; title.setPointSize(16); title.setBold(true); nameLabel_->setFont(title);
     connection_ = new QLabel(QStringLiteral("AI 연결 안 됨"), this); connection_->setTextFormat(Qt::PlainText); connection_->setAccessibleName(QStringLiteral("AI 연결 상태"));
     auto* close = new QPushButton(QStringLiteral("닫기"), this); close->setToolTip(QStringLiteral("대화창 숨기기 (Esc)")); close->setAccessibleName(QStringLiteral("대화창 닫기"));
-    header->addWidget(name); header->addStretch(); header->addWidget(close); layout->addLayout(header); layout->addWidget(connection_);
+    header->addWidget(nameLabel_, 1); header->addWidget(close); layout->addLayout(header); layout->addWidget(connection_);
     auto* quick = new QHBoxLayout; quick->setSpacing(6);
     const auto action = [this, quick](const QString& text, void (PetAssistantPanel::*signal)()) {
         auto* b = new QPushButton(text, this); b->setAccessibleName(text); b->setToolTip(text + QStringLiteral(" 화면 요청")); quick->addWidget(b); connect(b, &QPushButton::clicked, this, signal);
@@ -52,7 +94,19 @@ PetAssistantPanel::PetAssistantPanel(QWidget* parent)
     connect(close, &QPushButton::clicked, this, &QWidget::hide); connect(fresh_, &QPushButton::clicked, this, &PetAssistantPanel::newConversationRequested);
     connect(send_, &QPushButton::clicked, this, [this] { if (busy_) { state_->setText(QStringLiteral("중지 요청 중…")); emit cancelRequested(); } else submit(); });
     connect(input_, &QPlainTextEdit::textChanged, this, &PetAssistantPanel::updateInputState);
+    setDisplayName(AppConstants::PetDefaultName);
     updateInputState(); renderMessages();
+}
+void PetAssistantPanel::setDisplayName(const QString& value)
+{
+    const QString previousName = displayName_;
+    displayName_ = AppConstants::normalizedPetName(value);
+    static_cast<ElidedNameLabel*>(nameLabel_)->setFullText(displayName_);
+    setWindowTitle(QStringLiteral("%1 · 개인비서").arg(displayName_));
+    setAccessibleName(QStringLiteral("%1 개인비서 대화창").arg(displayName_));
+    if (busy_ && state_->text() == QStringLiteral("%1가 응답 중이야…").arg(previousName))
+        state_->setText(QStringLiteral("%1가 응답 중이야…").arg(displayName_));
+    renderMessages();
 }
 void PetAssistantPanel::updateInputState()
 {
@@ -86,12 +140,12 @@ bool PetAssistantPanel::eventFilter(QObject* object, QEvent* e)
     }
     return QWidget::eventFilter(object, e);
 }
-void PetAssistantPanel::appendUserMessage(const QString& text) { messages_.append({QStringLiteral("나"), text}); renderMessages(); }
-void PetAssistantPanel::beginAssistantMessage() { messages_.append({QStringLiteral("모아"), QString()}); assistantIndex_ = messages_.size()-1; setBusy(true); renderMessages(); }
+void PetAssistantPanel::appendUserMessage(const QString& text) { messages_.append({MessageRole::User, text}); renderMessages(); }
+void PetAssistantPanel::beginAssistantMessage() { messages_.append({MessageRole::Assistant, QString()}); assistantIndex_ = messages_.size()-1; setBusy(true); renderMessages(); }
 void PetAssistantPanel::appendAssistantDelta(const QString& text) { if (assistantIndex_ < 0) return; messages_[assistantIndex_].text += text; renderMessages(); }
 void PetAssistantPanel::finishAssistantMessage() { assistantIndex_ = -1; setBusy(false); }
 void PetAssistantPanel::showError(const QString& text) { assistantIndex_ = -1; setBusy(false); state_->setText(QStringLiteral("오류 · ") + text); }
-void PetAssistantPanel::setBusy(bool value) { busy_ = value; input_->setReadOnly(value); fresh_->setEnabled(!value); send_->setText(value ? QStringLiteral("중지") : QStringLiteral("보내기")); send_->setToolTip(value ? QStringLiteral("응답 중지 요청") : QStringLiteral("메시지 전송")); updateInputState(); if (value) state_->setText(QStringLiteral("모아가 응답 중이야…")); }
+void PetAssistantPanel::setBusy(bool value) { busy_ = value; input_->setReadOnly(value); fresh_->setEnabled(!value); send_->setText(value ? QStringLiteral("중지") : QStringLiteral("보내기")); send_->setToolTip(value ? QStringLiteral("응답 중지 요청") : QStringLiteral("메시지 전송")); updateInputState(); if (value) state_->setText(QStringLiteral("%1가 응답 중이야…").arg(displayName_)); }
 void PetAssistantPanel::setConnectionStatus(const QString& text) { connection_->setText(text); }
 void PetAssistantPanel::resetConversation() { messages_.clear(); assistantIndex_ = -1; input_->clear(); setBusy(false); renderMessages(); }
 void PetAssistantPanel::renderMessages()
@@ -99,7 +153,7 @@ void PetAssistantPanel::renderMessages()
     auto* bar = history_->verticalScrollBar(); const int old = bar->value(); const bool bottom = old >= bar->maximum()-4;
     QString html = QStringLiteral("<html><body style='font-family:맑은 고딕; font-size:10pt; color:#253e47;'>");
     if (messages_.isEmpty()) html += QStringLiteral("<p style='color:#566f75;'>업무와 궁금한 이야기를 이곳에서 시작해.<br>AI 연결 상태는 위에서 확인할 수 있어.</p>");
-    for (const auto& message : messages_) { QString text = message.text.toHtmlEscaped(); text.replace(QStringLiteral("\n"), QStringLiteral("<br>")); html += QStringLiteral("<p style='margin-top:14px;'><b style='color:#137e76;'>%1</b><br>%2</p>").arg(message.role.toHtmlEscaped(), text); }
+    for (const auto& message : messages_) { const QString roleName = message.role == MessageRole::User ? QStringLiteral("나") : displayName_; QString text = message.text.toHtmlEscaped(); text.replace(QStringLiteral("\n"), QStringLiteral("<br>")); html += QStringLiteral("<p style='margin-top:14px;'><b style='color:#137e76;'>%1</b><br>%2</p>").arg(roleName.toHtmlEscaped(), text); }
     history_->setHtml(html + QStringLiteral("</body></html>")); bar->setValue(bottom ? bar->maximum() : old);
 }
 void PetAssistantPanel::showNear(const QRect& anchor)

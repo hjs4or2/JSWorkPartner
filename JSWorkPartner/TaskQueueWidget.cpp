@@ -1071,6 +1071,7 @@ void TaskQueueWidget::setupDesktopPet()
     connect(assistantPanel_,&PetAssistantPanel::weeklyReportRequested,this,[this]() {showWeeklyReport();});
     connect(assistantController_,&PetAssistantController::tasksChanged,this,[this]() {if (externalWatcher_) externalWatcher_->requestRefresh();});
     connect(qApp,&QCoreApplication::aboutToQuit,assistantController_,&PetAssistantController::shutdown);
+    QTimer::singleShot(0,assistantController_,&PetAssistantController::offerConversationRestore);
     const auto count=[this]() {desktopPet_->setPendingCount(pendingViewModel_.taskCount());};
     connect(&pendingViewModel_,&QAbstractItemModel::modelReset,this,count);
     connect(&pendingViewModel_,&QAbstractItemModel::rowsInserted,this,count);

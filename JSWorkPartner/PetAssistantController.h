@@ -6,6 +6,8 @@
 #include <QtCore/QPointer>
 #include <QtCore/QString>
 #include <functional>
+#include <QtCore/QTimer>
+#include "PetConversationStore.h"
 class DesktopPetWidget;
 class PetAssistantPanel;
 class CodexAssistantBackend;
@@ -19,6 +21,7 @@ public:
     PetAssistantController(DesktopPetWidget& pet,PetAssistantPanel& panel,const QString& existingDatabase,QObject* parent=nullptr);
     ~PetAssistantController() override;
     void showAssistant();
+    void offerConversationRestore();
     void shutdown();
     QString connectionStatus() const { return connectionStatus_; }
 signals:
@@ -27,6 +30,9 @@ signals:
 private:
     void setConnectionStatus(const QString& status);
     void submit(const QString& text);
+    void submitToBackend(const QString& text);
+    void saveConversation();
+    void resetConversation();
     void handleTool(QJsonValue id,QString call,QString thread,QString turn,QString name,QJsonObject arguments);
     void dispatch(const QString& name,QJsonObject arguments,std::function<void(QJsonObject,bool)> done,std::function<bool()> operationGate={});
     void selectCompletion(QJsonObject arguments,std::function<void(QJsonObject,bool)> done,std::function<bool()> operationGate={});
@@ -39,6 +45,15 @@ private:
     CodexAssistantBackend* backend_=nullptr;
     LocalTaskToolClient* tasks_=nullptr;
     QString database_,pendingText_,intent_,lastText_;
+    PetConversationStore store_;
+    PetConversationSnapshot savedConversation_;
+    QJsonArray restoredReference_;
+    QTimer saveTimer_;
+    QString restoreError_;
+    bool restorePending_=false;
+    bool restoring_=false;
+    bool persistenceDisabled_=false;
+    QPointer<QDialog> restoreChoice_;
     QString connectionStatus_=QStringLiteral("연결 전");
     QHash<QString,QString> unresolved_;
     QHash<QString,QJsonObject> successful_;

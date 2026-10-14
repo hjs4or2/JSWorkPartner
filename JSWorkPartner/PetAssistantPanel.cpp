@@ -1,5 +1,6 @@
 #include "PetAssistantPanel.h"
 #include "AppConstants.h"
+#include <QtCore/QJsonObject>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QTextBrowser>
 #include <QtWidgets/QPlainTextEdit>
@@ -86,6 +87,8 @@ PetAssistantPanel::PetAssistantPanel(QWidget* parent)
         auto* b = new QPushButton(text, this); b->setAccessibleName(text); b->setToolTip(text + QStringLiteral(" 화면 요청")); quick->addWidget(b); connect(b, &QPushButton::clicked, this, signal);
     };
     action(QStringLiteral("업무 추가"), &PetAssistantPanel::newTaskRequested); action(QStringLiteral("할 일"), &PetAssistantPanel::tasksRequested); action(QStringLiteral("주간보고서"), &PetAssistantPanel::weeklyReportRequested); layout->addLayout(quick);
+    notice_ = new QLabel(this); notice_->setTextFormat(Qt::PlainText); notice_->setWordWrap(true); layout->addWidget(notice_);
+    storageNotice_ = new QLabel(this); storageNotice_->setTextFormat(Qt::PlainText); storageNotice_->setWordWrap(true); layout->addWidget(storageNotice_);
     history_ = new QTextBrowser(this); history_->setOpenLinks(false); history_->setOpenExternalLinks(false); history_->setAccessibleName(QStringLiteral("대화 목록")); layout->addWidget(history_, 1);
     state_ = new QLabel(this); state_->setTextFormat(Qt::PlainText); state_->setWordWrap(true); state_->setAccessibleName(QStringLiteral("전송 상태")); layout->addWidget(state_);
     input_ = new QPlainTextEdit(this); input_->setPlaceholderText(QStringLiteral("업무를 추가하거나 궁금한 점을 물어봐.")); input_->setFixedHeight(86); input_->setAccessibleName(QStringLiteral("메시지 입력")); input_->setToolTip(QStringLiteral("Enter 전송 · Shift+Enter 줄바꿈 · 최대 4,000자")); input_->installEventFilter(this); layout->addWidget(input_);
@@ -93,7 +96,7 @@ PetAssistantPanel::PetAssistantPanel(QWidget* parent)
     send_ = new QPushButton(QStringLiteral("보내기"), this); send_->setObjectName(QStringLiteral("send")); send_->setAccessibleName(QStringLiteral("메시지 보내기 또는 중지")); footer->addWidget(fresh_); footer->addStretch(); footer->addWidget(send_); layout->addLayout(footer);
     connect(close, &QPushButton::clicked, this, &QWidget::hide); connect(fresh_, &QPushButton::clicked, this, &PetAssistantPanel::newConversationRequested);
     connect(send_, &QPushButton::clicked, this, [this] { if (busy_) { state_->setText(QStringLiteral("중지 요청 중…")); emit cancelRequested(); } else submit(); });
-    connect(input_, &QPlainTextEdit::textChanged, this, &PetAssistantPanel::updateInputState);
+    connect(input_, &QPlainTextEdit::textChanged, this, [this] { boundMessages(); updateInputState(); renderMessages(); emit conversationChanged(); });
     setDisplayName(AppConstants::PetDefaultName);
     updateInputState(); renderMessages();
 }
@@ -111,7 +114,7 @@ void PetAssistantPanel::setDisplayName(const QString& value)
 void PetAssistantPanel::updateInputState()
 {
     const int length = input_->toPlainText().size();
-    send_->setEnabled(busy_ || (length <= MaximumInputLength && !input_->toPlainText().trimmed().isEmpty()));
+    send_->setEnabled(!restorePending_ && (busy_ || (length <= MaximumInputLength && !input_->toPlainText().trimmed().isEmpty())));
     if (!busy_) state_->setText(length > MaximumInputLength ? QStringLiteral("입력은 4,000자까지 가능해. (%1자)").arg(length) : QStringLiteral("Enter 전송 · Shift+Enter 줄바꿈"));
 }
 void PetAssistantPanel::paintEvent(QPaintEvent*)
@@ -125,7 +128,7 @@ void PetAssistantPanel::paintEvent(QPaintEvent*)
 void PetAssistantPanel::submit()
 {
     const QString text = input_->toPlainText().trimmed();
-    if (busy_ || composing_ || text.isEmpty() || input_->toPlainText().size() > MaximumInputLength) return;
+    if (restorePending_ || busy_ || composing_ || text.isEmpty() || input_->toPlainText().size() > MaximumInputLength) return;
     input_->clear(); emit messageSubmitted(text);
 }
 bool PetAssistantPanel::eventFilter(QObject* object, QEvent* e)
@@ -140,20 +143,25 @@ bool PetAssistantPanel::eventFilter(QObject* object, QEvent* e)
     }
     return QWidget::eventFilter(object, e);
 }
-void PetAssistantPanel::appendUserMessage(const QString& text) { messages_.append({MessageRole::User, text}); renderMessages(); }
-void PetAssistantPanel::beginAssistantMessage() { messages_.append({MessageRole::Assistant, QString()}); assistantIndex_ = messages_.size()-1; setBusy(true); renderMessages(); }
-void PetAssistantPanel::appendAssistantDelta(const QString& text) { if (assistantIndex_ < 0) return; messages_[assistantIndex_].text += text; renderMessages(); }
-void PetAssistantPanel::finishAssistantMessage() { assistantIndex_ = -1; setBusy(false); }
-void PetAssistantPanel::showError(const QString& text) { assistantIndex_ = -1; setBusy(false); state_->setText(QStringLiteral("오류 · ") + text); }
-void PetAssistantPanel::setBusy(bool value) { busy_ = value; input_->setReadOnly(value); fresh_->setEnabled(!value); send_->setText(value ? QStringLiteral("중지") : QStringLiteral("보내기")); send_->setToolTip(value ? QStringLiteral("응답 중지 요청") : QStringLiteral("메시지 전송")); updateInputState(); if (value) state_->setText(QStringLiteral("%1가 응답 중이야…").arg(displayName_)); }
+void PetAssistantPanel::appendUserMessage(const QString& text) { messages_.append({MessageRole::User, text}); boundMessages(); renderMessages(); emit conversationChanged(); }
+void PetAssistantPanel::beginAssistantMessage() { messages_.append({MessageRole::Assistant, QString(),true}); assistantIndex_ = messages_.size()-1; boundMessages(); interrupted_=true; setBusy(true); renderMessages(); emit conversationChanged(); }
+void PetAssistantPanel::appendAssistantDelta(const QString& text) { if (assistantIndex_ < 0) return; auto& message=messages_[assistantIndex_]; if (message.text.size()+text.size()>PetConversationStore::MaximumMessageLength) limited_=true; message.text += text.left(qMax(0,PetConversationStore::MaximumMessageLength-message.text.size())); boundMessages(); renderMessages(); emit conversationChanged(); }
+void PetAssistantPanel::finishAssistantMessage(bool completed) { if (assistantIndex_>=0) messages_[assistantIndex_].interrupted=!completed; interrupted_=!completed; assistantIndex_ = -1; setBusy(false); boundMessages(); renderMessages(); emit conversationChanged(); }
+void PetAssistantPanel::showError(const QString& text) { finishAssistantMessage(false); state_->setText(QStringLiteral("오류 · ") + text); }
+void PetAssistantPanel::setBusy(bool value) { busy_ = value; input_->setReadOnly(value || restorePending_); fresh_->setEnabled(!value && !restorePending_); send_->setText(value ? QStringLiteral("중지") : QStringLiteral("보내기")); send_->setToolTip(value ? QStringLiteral("응답 중지 요청") : QStringLiteral("메시지 전송")); updateInputState(); if (value) state_->setText(QStringLiteral("%1가 응답 중이야…").arg(displayName_)); }
 void PetAssistantPanel::setConnectionStatus(const QString& text) { connection_->setText(text); }
-void PetAssistantPanel::resetConversation() { messages_.clear(); assistantIndex_ = -1; input_->clear(); setBusy(false); renderMessages(); }
+void PetAssistantPanel::resetConversation() { messages_.clear(); assistantIndex_ = -1; limited_=false; interrupted_=false; input_->clear(); setBusy(false); renderMessages(); emit conversationChanged(); }
 void PetAssistantPanel::renderMessages()
 {
     auto* bar = history_->verticalScrollBar(); const int old = bar->value(); const bool bottom = old >= bar->maximum()-4;
     QString html = QStringLiteral("<html><body style='font-family:맑은 고딕; font-size:10pt; color:#253e47;'>");
     if (messages_.isEmpty()) html += QStringLiteral("<p style='color:#566f75;'>업무와 궁금한 이야기를 이곳에서 시작해.<br>AI 연결 상태는 위에서 확인할 수 있어.</p>");
-    for (const auto& message : messages_) { const QString roleName = message.role == MessageRole::User ? QStringLiteral("나") : displayName_; QString text = message.text.toHtmlEscaped(); text.replace(QStringLiteral("\n"), QStringLiteral("<br>")); html += QStringLiteral("<p style='margin-top:14px;'><b style='color:#137e76;'>%1</b><br>%2</p>").arg(roleName.toHtmlEscaped(), text); }
+    for (const auto& message : messages_) { QString text = message.text.toHtmlEscaped(); text.replace(QStringLiteral("\n"), QStringLiteral("<br>")); html += QStringLiteral("<p style='margin-top:14px;'><b style='color:#137e76;'>%1</b><br>%2</p>").arg((message.role==MessageRole::User ? QStringLiteral("나") : displayName_ + (message.interrupted ? QStringLiteral(" · 중단된 응답") : QString())).toHtmlEscaped(), text); }
+    QStringList notices;
+    bool hasInterrupted=interrupted_; for (const auto& m:messages_) hasInterrupted=hasInterrupted || m.interrupted;
+    if (hasInterrupted) notices.append(QStringLiteral("중단된 요청은 이미 완료됐을 수 있어. 필요하면 할 일 목록에서 확인해. 자동으로 다시 실행하지 않아."));
+    if (limited_) notices.append(QStringLiteral("저장 한도로 최근 100개·256KiB만 보관해. 긴 응답은 32,768자, 작성 중 입력은 4,000자까지 보관해."));
+    notice_->setText(notices.join(QLatin1Char('\n'))); notice_->setVisible(!notices.isEmpty());
     history_->setHtml(html + QStringLiteral("</body></html>")); bar->setValue(bottom ? bar->maximum() : old);
 }
 void PetAssistantPanel::showNear(const QRect& anchor)
@@ -164,3 +172,26 @@ void PetAssistantPanel::showNear(const QRect& anchor)
         move(qBound(area.left(), x, qMax(area.left(), area.right()-width()+1)), qBound(area.top(), anchor.center().y()-height()/2, qMax(area.top(), area.bottom()-height()+1))); }
     show(); raise(); activateWindow(); input_->setFocus();
 }
+
+PetConversationSnapshot PetAssistantPanel::snapshot() const
+{
+    PetConversationSnapshot s;s.draft=input_->toPlainText().left(MaximumInputLength);s.interrupted=interrupted_ || busy_;s.limited=limited_ || input_->toPlainText().size()>MaximumInputLength;
+    for (const auto& m:messages_) s.messages.append(QJsonObject{{QStringLiteral("role"),m.role==MessageRole::User ? QStringLiteral("user") : QStringLiteral("assistant")},{QStringLiteral("text"),m.text},{QStringLiteral("interrupted"),m.interrupted}});
+    return s;
+}
+void PetAssistantPanel::boundMessages()
+{
+    while (messages_.size()>1 && (messages_.size()>PetConversationStore::MaximumMessages || !PetConversationStore::validate(snapshot()))) {
+        messages_.removeFirst();if (assistantIndex_>=0) --assistantIndex_;limited_=true;
+    }
+}
+void PetAssistantPanel::restoreConversation(const PetConversationSnapshot& s)
+{
+    messages_.clear();assistantIndex_=-1;limited_=s.limited;interrupted_=s.interrupted;
+    for (const auto v:s.messages) {const auto m=v.toObject();messages_.append({m.value(QStringLiteral("role")).toString()==QStringLiteral("user") ? MessageRole::User : MessageRole::Assistant,m.value(QStringLiteral("text")).toString(),m.value(QStringLiteral("interrupted")).toBool()});}
+    input_->setPlainText(s.draft);setBusy(false);renderMessages();emit conversationChanged();
+}
+void PetAssistantPanel::setRestorePending(bool pending)
+{restorePending_=pending;setBusy(false);}
+void PetAssistantPanel::setStorageNotice(const QString& text)
+{storageNotice_->setText(text);storageNotice_->setVisible(!text.isEmpty());}

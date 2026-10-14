@@ -29,21 +29,27 @@ bool validId(const QJsonValue& id)
 }
 }
 PetAssistantController::PetAssistantController(DesktopPetWidget& pet,PetAssistantPanel& panel,const QString& database,QObject* parent)
-    :QObject(parent),pet_(pet),panel_(panel),database_(QFileInfo(database).absoluteFilePath())
+    :QObject(parent),pet_(pet),panel_(panel),database_(QFileInfo(database).absoluteFilePath()),store_(database_)
 {
+    const auto loaded=store_.load(savedConversation_,restoreError_);
+    restorePending_=loaded!=PetConversationStore::LoadResult::Missing;
+    panel_.setRestorePending(restorePending_);
+    saveTimer_.setSingleShot(true);saveTimer_.setInterval(200);
+    connect(&saveTimer_,&QTimer::timeout,this,&PetAssistantController::saveConversation);
+    connect(&panel_,&PetAssistantPanel::conversationChanged,this,[this]() {if (!restorePending_ && !restoring_ && !shuttingDown_ && !saveTimer_.isActive()) saveTimer_.start();});
     backend_=new CodexAssistantBackend(this);tasks_=new LocalTaskToolClient(this);
     tasks_->configure(findTaskExecutable(),database_);
     connect(&panel_,&PetAssistantPanel::messageSubmitted,this,&PetAssistantController::submit);
     connect(&panel_,&PetAssistantPanel::cancelRequested,this,[this]() {
         if (selection_) selection_->reject();
         if (questions_) questions_->reject();
-        if (connecting_) {pendingText_.clear();connecting_=false;backend_->shutdown();tasks_->shutdown();panel_.setBusy(false);pet_.setBusy(false);panel_.finishAssistantMessage();setConnectionStatus(QStringLiteral("연결 전"));}
+        if (connecting_) {pendingText_.clear();connecting_=false;backend_->shutdown();tasks_->shutdown();panel_.setBusy(false);pet_.setBusy(false);panel_.finishAssistantMessage(false);setConnectionStatus(QStringLiteral("연결 전"));}
         else backend_->cancel();
     });
     connect(&panel_,&PetAssistantPanel::newConversationRequested,this,[this]() {
         if (backend_->isBusy() || connecting_) return;
         if (questions_) questions_->reject();
-        backend_->newConversation();panel_.resetConversation();knownTasks_.clear();successful_.clear();lastText_.clear();lastFailed_=false;
+        resetConversation();
         // Lost mutation responses retain retry identities for this application's lifetime.
     });
     connect(backend_,&CodexAssistantBackend::ready,this,[this]() {
@@ -53,7 +59,7 @@ PetAssistantController::PetAssistantController(DesktopPetWidget& pet,PetAssistan
         if (!connecting_ || pendingText_.isEmpty()) return;
         // Updating tools is local; does not start another turn or fetch task data.
         backend_->setDynamicTools(tasks_->dynamicTools());
-        const QString text=pendingText_;pendingText_.clear();connecting_=false;backend_->submit(text);
+        const QString text=pendingText_;pendingText_.clear();connecting_=false;submitToBackend(text);
     });
     connect(backend_,&CodexAssistantBackend::registeredTaskServer,this,[this](const QString& exe,const QString& registeredDb) {
         if (QFileInfo(registeredDb).absoluteFilePath().compare(database_,Qt::CaseInsensitive)!=0 || !QFileInfo(exe).isFile()) return;
@@ -67,7 +73,7 @@ PetAssistantController::PetAssistantController(DesktopPetWidget& pet,PetAssistan
         else panel_.showError(message);
         if (!backend_->isReady() && questions_) questions_->reject();
         panel_.setBusy(backend_->isBusy());pet_.setBusy(backend_->isBusy());
-        if (!backend_->isBusy()) panel_.finishAssistantMessage();
+        if (!backend_->isBusy()) panel_.finishAssistantMessage(false);
     };
     connect(tasks_,&LocalTaskToolClient::connectionError,this,error);
     connect(backend_,&CodexAssistantBackend::connectionError,this,error);
@@ -89,7 +95,9 @@ PetAssistantController::PetAssistantController(DesktopPetWidget& pet,PetAssistan
         lastFailed_=status!=QStringLiteral("completed");
         if (status==QStringLiteral("completed") && backend_->isReady() && tasks_->isReady())
             setConnectionStatus(QStringLiteral("연결됨"));
-        panel_.finishAssistantMessage();
+        panel_.finishAssistantMessage(status==QStringLiteral("completed"));
+        if (status==QStringLiteral("completed")) restoredReference_=QJsonArray();
+        saveConversation();
         if (status==QStringLiteral("interrupted")) panel_.showError(QStringLiteral("응답을 취소했습니다. 이미 요청한 업무 변경은 완료됐을 수 있습니다."));
     });
     connect(backend_,&CodexAssistantBackend::toolRequested,this,&PetAssistantController::handleTool);
@@ -119,13 +127,13 @@ QString PetAssistantController::findTaskExecutable() const
     return QString();
 }
 void PetAssistantController::showAssistant()
-{ if (!pet_.isVisible()) {pet_.ensureVisibleOnScreen();pet_.show();} panel_.showNear(pet_.geometry()); }
+{ if (!pet_.isVisible()) {pet_.ensureVisibleOnScreen();pet_.show();} panel_.showNear(pet_.geometry()); if (restorePending_) offerConversationRestore(); }
 void PetAssistantController::submit(const QString& text)
 {
-    if (shuttingDown_ || connecting_ || backend_->isBusy() || text.trimmed().isEmpty() || text.size()>4000) return;
+    if (restorePending_ || shuttingDown_ || connecting_ || backend_->isBusy() || text.trimmed().isEmpty() || text.size()>4000) return;
     if (!(lastFailed_ && lastText_==text)) {intent_=QUuid::createUuid().toString().mid(1,36);successful_.clear();}
-    lastText_=text;lastFailed_=false;panel_.appendUserMessage(text);panel_.beginAssistantMessage();
-    if (backend_->isReady() && tasks_->isReady()) {backend_->submit(text);return;}
+    lastText_=text;lastFailed_=false;panel_.appendUserMessage(text);panel_.beginAssistantMessage();saveConversation();
+    if (backend_->isReady() && tasks_->isReady()) {submitToBackend(text);return;}
     connecting_=true;pendingText_=text;panel_.setBusy(true);pet_.setBusy(true);backend_->start({});
 }
 void PetAssistantController::handleTool(QJsonValue id,QString call,QString thread,QString turn,QString name,QJsonObject arguments)
@@ -205,7 +213,7 @@ void PetAssistantController::selectCompletion(QJsonObject arguments,std::functio
     },operationGate);
 }
 void PetAssistantController::shutdown()
-{ if (shuttingDown_) return;shuttingDown_=true;pendingText_.clear();if (selection_) selection_->reject();if (questions_) questions_->reject();backend_->shutdown();tasks_->shutdown(); }
+{ if (shuttingDown_) return;saveTimer_.stop();saveConversation();shuttingDown_=true;if (restoreChoice_) restoreChoice_->reject();pendingText_.clear();if (selection_) selection_->reject();if (questions_) questions_->reject();backend_->shutdown();tasks_->shutdown(); }
 void PetAssistantController::askQuestions(QJsonValue id,QJsonArray questions)
 {
     if (questions_ || questions.isEmpty() || questions.size()>3 || shuttingDown_) {backend_->answerQuestions(id,{});return;}
@@ -252,4 +260,50 @@ void PetAssistantController::askAsyncQuestions(QString,QJsonArray questions)
         const QString text=answers.join('\n');if (text.isEmpty() || text.size()>4000) return;
         panel_.appendUserMessage(text);if (!backend_->isBusy()) panel_.beginAssistantMessage();backend_->answerAsyncQuestions(text);
     });dialog->open();
+}
+
+void PetAssistantController::saveConversation()
+{
+    if (restorePending_ || restoring_ || persistenceDisabled_ || shuttingDown_) return;
+    QString error;
+    if (!store_.save(panel_.snapshot(),error)) panel_.setStorageNotice(error);
+    else panel_.setStorageNotice(QString());
+}
+void PetAssistantController::submitToBackend(const QString& text)
+{backend_->submit(text,restoredReference_);}
+void PetAssistantController::resetConversation()
+{
+    saveTimer_.stop();restoring_=true;restorePending_=false;panel_.setRestorePending(false);
+    backend_->newConversation();restoredReference_=QJsonArray();savedConversation_={};restoreError_.clear();
+    panel_.resetConversation();knownTasks_.clear();successful_.clear();lastText_.clear();lastFailed_=false;
+    QString error;persistenceDisabled_=!store_.clear(error);panel_.setStorageNotice(error);restoring_=false;
+    // Keep unresolved retry IDs in memory only, as before. Never replay them.
+}
+void PetAssistantController::offerConversationRestore()
+{
+    if (!restorePending_ || shuttingDown_) return;
+    if (restoreChoice_) {restoreChoice_->raise();restoreChoice_->activateWindow();return;}
+    auto* dialog=new QDialog(&panel_);dialog->setObjectName(QStringLiteral("petConversationRestore"));dialog->setAttribute(Qt::WA_DeleteOnClose);dialog->setAttribute(Qt::WA_QuitOnClose,false);dialog->setMinimumWidth(360);
+    dialog->setWindowTitle(QStringLiteral("이전 대화"));restoreChoice_=dialog;
+    auto* layout=new QVBoxLayout(dialog);
+    auto* label=new QLabel(restoreError_.isEmpty() ? QStringLiteral("이전 대화와 작성 중 입력이 있어. 이어 말할까?\n이전 요청은 자동으로 다시 실행하지 않아.") : restoreError_,dialog);
+    label->setTextFormat(Qt::PlainText);label->setWordWrap(true);layout->addWidget(label);
+    auto* buttons=new QDialogButtonBox(dialog);layout->addWidget(buttons);
+    if (restoreError_.isEmpty()) {
+        auto* resume=buttons->addButton(QStringLiteral("이어 말하기"),QDialogButtonBox::AcceptRole);resume->setObjectName(QStringLiteral("resumeConversation"));
+        connect(resume,&QPushButton::clicked,dialog,[dialog]() {dialog->done(1);});
+    }
+    auto* fresh=buttons->addButton(QStringLiteral("새 대화"),QDialogButtonBox::DestructiveRole);fresh->setObjectName(QStringLiteral("startNewConversation"));
+    connect(fresh,&QPushButton::clicked,dialog,[dialog]() {dialog->done(2);});
+    auto* close=buttons->addButton(QStringLiteral("닫기"),QDialogButtonBox::RejectRole);connect(close,&QPushButton::clicked,dialog,&QDialog::reject);
+    connect(dialog,&QDialog::finished,this,[this,dialog](int result) {
+        if (restoreChoice_==dialog) restoreChoice_=nullptr;
+        if (shuttingDown_ || result==0) return;
+        if (result==2) {resetConversation();panel_.showNear(pet_.geometry());return;}
+        if (result!=1 || !restoreError_.isEmpty()) return;
+        restoring_=true;restorePending_=false;panel_.setRestorePending(false);
+        restoredReference_=savedConversation_.messages;panel_.restoreConversation(savedConversation_);savedConversation_={};restoring_=false;
+        panel_.showNear(pet_.geometry());saveConversation();
+    });
+    dialog->open();
 }

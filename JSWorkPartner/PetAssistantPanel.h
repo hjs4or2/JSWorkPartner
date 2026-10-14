@@ -1,6 +1,7 @@
 #pragma once
 #include <QtWidgets/QWidget>
 #include <QtCore/QStringList>
+#include "PetConversationStore.h"
 class QLabel;
 class QTextBrowser;
 class QPlainTextEdit;
@@ -14,7 +15,11 @@ public:
     void appendUserMessage(const QString& text);
     void beginAssistantMessage();
     void appendAssistantDelta(const QString& text);
-    void finishAssistantMessage();
+    void finishAssistantMessage(bool completed=true);
+    PetConversationSnapshot snapshot() const;
+    void restoreConversation(const PetConversationSnapshot& snapshot);
+    void setRestorePending(bool pending);
+    void setStorageNotice(const QString& text);
     void showError(const QString& text);
     void setBusy(bool busy);
     void setConnectionStatus(const QString& text);
@@ -22,6 +27,7 @@ public:
     void showNear(const QRect& anchor);
     static constexpr int MaximumInputLength = 4000;
 signals:
+    void conversationChanged();
     void messageSubmitted(QString text);
     void cancelRequested();
     void newConversationRequested();
@@ -35,11 +41,17 @@ private:
     void submit();
     void renderMessages();
     void updateInputState();
-    struct Message { QString role; QString text; };
+    struct Message { QString role; QString text; bool interrupted=false; };
+    void boundMessages();
     QList<Message> messages_;
     int assistantIndex_ = -1;
     bool busy_ = false;
     bool composing_ = false;
+    bool restorePending_ = false;
+    bool limited_ = false;
+    bool interrupted_ = false;
+    QLabel* notice_ = nullptr;
+    QLabel* storageNotice_ = nullptr;
     QLabel* connection_ = nullptr;
     QLabel* state_ = nullptr;
     QTextBrowser* history_ = nullptr;

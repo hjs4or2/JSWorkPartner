@@ -18,7 +18,7 @@ public:
     ~CodexAssistantBackend() override;
     void start(const QJsonArray& tools);
     void setDynamicTools(const QJsonArray& tools) { if (!busy_) tools_=tools; }
-    void submit(const QString& text);
+    void submit(const QString& text,const QJsonArray& pastReference=QJsonArray());
     void cancel();
     void newConversation();
     void shutdown();
@@ -63,6 +63,7 @@ private:
     QTimer watchdog_;
     QElapsedTimer activity_,duration_,cancelElapsed_;
     QJsonArray tools_;
+    QJsonArray pendingReference_;
     QString program_,version_,model_,thread_,turn_,pendingText_,catalogPath_;
     QHash<QString,QJsonObject> toolCalls_;
     QHash<QString,QJsonValue> inputRequests_;

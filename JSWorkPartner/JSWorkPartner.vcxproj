@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <!--
 ***************************************************************************************************
  Copyright (C) 2023 The Qt Company Ltd.
@@ -113,6 +113,7 @@ if exist "$(VCInstallDir)Redist\MSVC\$(VCToolsRedistVersion)\x64\Microsoft.VC143
   <ItemGroup>
     <ClCompile Include="AppConstants.cpp" />
     <ClCompile Include="DesktopPetWidget.cpp" />
+    <ClCompile Include="PetConversationStore.cpp" />
     <ClCompile Include="PetAssistantPanel.cpp" />
     <ClCompile Include="CodexAssistantBackend.cpp" />
     <ClCompile Include="LocalTaskToolClient.cpp" />
@@ -138,6 +139,7 @@ if exist "$(VCInstallDir)Redist\MSVC\$(VCToolsRedistVersion)\x64\Microsoft.VC143
   <ItemGroup>
     <ClInclude Include="AppConstants.h" />
     <ClInclude Include="DesktopPetWidget.h" />
+    <ClInclude Include="PetConversationStore.h" />
     <ClInclude Include="PetAssistantPanel.h" />
     <ClInclude Include="CodexAssistantBackend.h" />
     <ClInclude Include="LocalTaskToolClient.h" />

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QtCore/QString>
+#include <QtCore/QVariant>
 
 namespace AppConstants
 {
@@ -24,6 +25,11 @@ extern const QString PetVisibleKey;
 extern const QString PetSizePercentKey;
 extern const QString PetDesignIdKey;
 extern const QString PetAlwaysOnTopKey;
+extern const QString PetNameKey;
+extern const QString PetDefaultName;
+constexpr int PetNameMaximumLength = 20;
+QString normalizedPetName(const QString& value);
+QString petNameFromSettings(const QVariant& value);
 extern const QString PetMcpExecutableKey;
 extern const QString RedmineUrlKey;
 extern const QString LegacyRedmineApiKeyKey;

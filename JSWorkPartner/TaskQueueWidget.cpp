@@ -31,6 +31,7 @@
 #include <QtGui/QDesktopServices>
 #include <QtGui/QFont>
 #include <QtGui/QKeySequence>
+#include <QtGui/QRegularExpressionValidator>
 #include <QtWidgets/QAbstractItemView>
 #include <QtWidgets/QAction>
 #include <QtWidgets/QApplication>
@@ -191,7 +192,14 @@ class PetDesignPreview final : public QWidget
 {
 public:
     explicit PetDesignPreview(QWidget* parent) : QWidget(parent) { setObjectName(QStringLiteral("desktopPetDesignPreview")); }
-    void setSelection(const QString& id, int percent) { id_ = id; percent_ = percent; setFixedSize(qRound(144*percent/100.0), qRound(150*percent/100.0)); update(); }
+    void setSelection(const QString& id, int percent)
+    {
+        id_ = id;
+        // Keep the preview compact so the name row and action buttons fit together.
+        percent_ = qMin(percent, 100);
+        setFixedSize(qRound(144*percent_/100.0), qRound(150*percent_/100.0));
+        update();
+    }
 protected:
     void paintEvent(QPaintEvent*) override { QPainter painter(this); painter.scale(percent_/100.0, percent_/100.0); DesktopPetWidget::paintDesign(painter,id_,0,false,0); }
 private:
@@ -217,6 +225,8 @@ public:
             sizePercent = DesktopPetWidget::normalizedSizePercent(ok ? stored : 50);
         }
         const bool alwaysOnTop = settings.value(AppConstants::PetAlwaysOnTopKey, true).toBool();
+        const QString petName =
+            AppConstants::petNameFromSettings(settings.value(AppConstants::PetNameKey));
 
         auto* layout = new QVBoxLayout(this);
         auto* description = new QLabel(
@@ -226,6 +236,15 @@ public:
 
         auto* robotGroup = new QGroupBox(QStringLiteral("바탕화면 로봇"), this);
         auto* robotLayout = new QFormLayout(robotGroup);
+        nameInput_ = new QLineEdit(petName, robotGroup);
+        nameInput_->setObjectName(QStringLiteral("desktopPetNameInput"));
+        nameInput_->setMaxLength(AppConstants::PetNameMaximumLength);
+        nameInput_->setValidator(new QRegularExpressionValidator(
+            QRegularExpression(QStringLiteral("[^\\p{Cc}\\p{Zl}\\p{Zp}]{0,%1}")
+                                   .arg(AppConstants::PetNameMaximumLength)),
+            nameInput_));
+        robotLayout->addRow(QStringLiteral("이름"), nameInput_);
+
         visibleCheck_ = new QCheckBox(QStringLiteral("바탕화면에 로봇 표시"), robotGroup);
         visibleCheck_->setObjectName(QStringLiteral("desktopPetVisibleCheck"));
         visibleCheck_->setChecked(visible);
@@ -288,12 +307,20 @@ public:
         layout->addWidget(buttons);
     }
 
-    void setApplyHandler(DesktopPetWidget* pet, std::function<void(bool)> visibilityHandler)
+    void setApplyHandler(
+        DesktopPetWidget* pet,
+        PetAssistantPanel* assistantPanel,
+        std::function<void(bool)> visibilityHandler)
     {
         pet_ = pet;
+        assistantPanel_ = assistantPanel;
         visibilityHandler_ = std::move(visibilityHandler);
     }
 
+    QString petName() const
+    {
+        return AppConstants::normalizedPetName(nameInput_->text());
+    }
     bool petVisible() const { return visibleCheck_->isChecked(); }
     int sizePercent() const { return sizeCombo_->currentData().toInt(); }
     bool alwaysOnTop() const { return alwaysOnTopCheck_->isChecked(); }
@@ -302,28 +329,35 @@ private:
     void saveAndApply()
     {
         const int size = sizePercent();
+        const QString name = petName();
         const bool visible = petVisible();
         const bool top = alwaysOnTop();
         QSettings settings;
         const QString design = DesktopPetWidget::normalizedDesignId(designCombo_->currentData().toString());
         settings.setValue(AppConstants::PetDesignIdKey, design);
+        settings.setValue(AppConstants::PetNameKey, name);
         settings.setValue(AppConstants::PetSizePercentKey, size);
         settings.setValue(AppConstants::PetAlwaysOnTopKey, top);
         settings.setValue(AppConstants::PetVisibleKey, visible);
         settings.sync();
-        if (pet_) { pet_->setDesignId(design); pet_->setSizePercent(size); }
+        if (pet_) pet_->setDesignId(design);
+        if (pet_) pet_->setDisplayName(name);
+        if (assistantPanel_) assistantPanel_->setDisplayName(name);
+        if (pet_) pet_->setSizePercent(size);
         if (visibilityHandler_) visibilityHandler_(visible);
         if (pet_) pet_->setAlwaysOnTop(top);
         settings.sync();
         accept();
     }
 
+    QLineEdit* nameInput_ = nullptr;
     QCheckBox* visibleCheck_ = nullptr;
     QComboBox* sizeCombo_ = nullptr;
     QComboBox* designCombo_ = nullptr;
     QCheckBox* alwaysOnTopCheck_ = nullptr;
     QLabel* statusLabel_ = nullptr;
     DesktopPetWidget* pet_ = nullptr;
+    PetAssistantPanel* assistantPanel_ = nullptr;
     std::function<void(bool)> visibilityHandler_;
 };
 }
@@ -1011,12 +1045,16 @@ void TaskQueueWidget::setupDesktopPet()
     assistantPanel_=new PetAssistantPanel;
     assistantController_=new PetAssistantController(*desktopPet_,*assistantPanel_,pendingViewModel_.databasePath(),this);
     QSettings settings;
+    const QString petName =
+        AppConstants::petNameFromSettings(settings.value(AppConstants::PetNameKey));
     bool sizeOk = false;
     const int savedSize = settings.value(AppConstants::PetSizePercentKey, 50).toInt(&sizeOk);
     desktopPet_->setSizePercent(sizeOk ? savedSize : 50);
     const QString design = DesktopPetWidget::normalizedDesignId(settings.value(AppConstants::PetDesignIdKey).toString());
     desktopPet_->setDesignId(design);
     settings.setValue(AppConstants::PetDesignIdKey, design);
+    desktopPet_->setDisplayName(petName);
+    assistantPanel_->setDisplayName(petName);
     desktopPet_->setAlwaysOnTop(settings.value(AppConstants::PetAlwaysOnTopKey, true).toBool());
     if (settings.contains(AppConstants::PetPositionKey)) desktopPet_->restorePosition(settings.value(AppConstants::PetPositionKey).toPoint());
     const auto newTask=[this]() {addTaskFromFloatingWidget();};
@@ -1054,7 +1092,7 @@ void TaskQueueWidget::hideDesktopPet()
 void TaskQueueWidget::showPetSettingsDialog()
 {
     PetSettingsDialog dialog(assistantController_);
-    dialog.setApplyHandler(desktopPet_, [this](bool visible) {
+    dialog.setApplyHandler(desktopPet_, assistantPanel_, [this](bool visible) {
         if (visible) showDesktopPet();
         else hideDesktopPet();
     });

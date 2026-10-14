@@ -33,7 +33,44 @@ const QString PetVisibleKey = QStringLiteral("desktopPet/visible");
 const QString PetSizePercentKey = QStringLiteral("desktopPet/sizePercent");
 const QString PetDesignIdKey = QStringLiteral("desktopPet/designId");
 const QString PetAlwaysOnTopKey = QStringLiteral("desktopPet/alwaysOnTop");
+const QString PetNameKey = QStringLiteral("desktopPet/name");
+const QString PetDefaultName = QStringLiteral("모아");
 const QString PetMcpExecutableKey = QStringLiteral("desktopPet/mcpExecutable");
+
+QString normalizedPetName(const QString& value)
+{
+    for (int index = 0; index < value.size(); ++index)
+    {
+        const QChar character = value.at(index);
+        if (character.isHighSurrogate())
+        {
+            if (index + 1 >= value.size() || !value.at(index + 1).isLowSurrogate())
+                return PetDefaultName;
+            ++index;
+            continue;
+        }
+        if (character.isLowSurrogate())
+            return PetDefaultName;
+
+        const QChar::Category category = character.category();
+        if (category == QChar::Other_Control ||
+            category == QChar::Separator_Line ||
+            category == QChar::Separator_Paragraph)
+            return PetDefaultName;
+    }
+
+    const QString normalized = value.trimmed();
+    if (normalized.isEmpty() || normalized.size() > PetNameMaximumLength)
+        return PetDefaultName;
+    return normalized;
+}
+
+QString petNameFromSettings(const QVariant& value)
+{
+    if (!value.isValid() || value.type() != QVariant::String)
+        return PetDefaultName;
+    return normalizedPetName(value.toString());
+}
 const QString RedmineUrlKey = QStringLiteral("redmine/baseUrl");
 const QString LegacyRedmineApiKeyKey =
     QStringLiteral("redmine/apiKeyProtected");

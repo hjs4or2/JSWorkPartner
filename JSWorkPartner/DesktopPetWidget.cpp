@@ -3,6 +3,7 @@
 #include <QtWidgets/QMenu>
 #include <QtGui/QScreen>
 #include <QtGui/QPainter>
+#include <QtGui/QPainterPath>
 #include <QtGui/QMouseEvent>
 #include <QtGui/QContextMenuEvent>
 #include <QtGui/QShowEvent>
@@ -118,27 +119,89 @@ void DesktopPetWidget::contextMenuEvent(QContextMenuEvent* e)
     connect(menu.addAction(QStringLiteral("로봇 숨기기")), &QAction::triggered, this, &DesktopPetWidget::hideRequested);
     menu.exec(e->globalPos());
 }
+QStringList DesktopPetWidget::designIds()
+{ return {QStringLiteral("mint-bot"), QStringLiteral("space-bot"), QStringLiteral("cat-bot"), QStringLiteral("mini-drone")}; }
+QString DesktopPetWidget::normalizedDesignId(const QString& id)
+{ return designIds().contains(id) ? id : QStringLiteral("mint-bot"); }
+QString DesktopPetWidget::designName(const QString& id)
+{
+    const int index = designIds().indexOf(normalizedDesignId(id));
+    return QStringList{QStringLiteral("민트봇"), QStringLiteral("우주봇"), QStringLiteral("고양이봇"), QStringLiteral("미니드론")}.at(index);
+}
+void DesktopPetWidget::setDesignId(const QString& id)
+{ designId_ = normalizedDesignId(id); update(); }
 void DesktopPetWidget::paintEvent(QPaintEvent*)
 {
-    QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
+    QPainter p(this);
     p.scale(sizePercent_ / 100.0, sizePercent_ / 100.0);
-    p.setPen(Qt::NoPen);
-    for (int i = 6; i > 0; --i) { p.setBrush(QColor(22, 50, 58, 4)); p.drawEllipse(QRectF(25-i, 131-i/2., 94+i*2, 9+i)); }
-    p.translate(0, std::sin(frame_ * .045) * 1.5);
-    p.setPen(QPen(QColor("#c8dbdf"), 1.6)); p.setBrush(QColor("#eef5f5"));
-    p.drawRoundedRect(QRectF(18, 75, 17, 34), 8, 8); p.drawRoundedRect(QRectF(109, 75, 17, 34), 8, 8);
-    p.drawRoundedRect(QRectF(43, 119, 23, 14), 6, 6); p.drawRoundedRect(QRectF(78, 119, 23, 14), 6, 6);
-    QLinearGradient body(0, 33, 0, 128); body.setColorAt(0, Qt::white); body.setColorAt(1, QColor("#eaf4f2")); p.setBrush(body);
-    p.drawRoundedRect(QRectF(29, 34, 86, 94), 28, 28);
-    p.setPen(QPen(QColor("#6cbdb1"), 3, Qt::SolidLine, Qt::RoundCap)); p.drawLine(QPointF(72, 33), QPointF(72, 22));
-    p.setPen(QPen(QColor("#77c9ba"), 1.4)); p.setBrush(QColor("#b7f1df")); p.drawEllipse(QPointF(72, 17), 6, 6);
-    p.setPen(QPen(QColor("#344b57"), 1.5)); p.setBrush(QColor("#20353f")); p.drawRoundedRect(QRectF(38, 47, 68, 47), 18, 18);
-    p.setPen(Qt::NoPen); p.setBrush(QColor("#a6f2df"));
-    const bool blink = frame_ % 112 >= 108;
-    const qreal eyeHeight = blink ? 2 : 13;
-    p.drawRoundedRect(QRectF(51, 70-eyeHeight/2, 8, eyeHeight), 4, 4); p.drawRoundedRect(QRectF(85, 70-eyeHeight/2, 8, eyeHeight), 4, 4);
-    p.setPen(QPen(QColor("#79cdbd"), 2, Qt::SolidLine, Qt::RoundCap)); p.drawArc(QRectF(66, 73, 12, 9), 200*16, 140*16);
-    p.setPen(Qt::NoPen); p.setBrush(QColor("#a0dfd0")); p.drawRoundedRect(QRectF(57, 105, 30, 5), 2.5, 2.5);
-    if (busy_) { p.setPen(QPen(QColor("#168b82"), 2.5, Qt::SolidLine, Qt::RoundCap)); p.drawArc(QRectF(65, 101, 14, 14), (frame_*12%360)*16, 240*16); }
-    else if (pendingCount_ > 0) { p.setBrush(QColor("#168b82")); p.drawEllipse(QRectF(102, 31, 24, 24)); p.setPen(Qt::white); QFont f = font(); f.setPixelSize(11); f.setBold(true); p.setFont(f); p.drawText(QRectF(102, 31, 24, 24), Qt::AlignCenter, pendingCount_ > 99 ? QStringLiteral("99+") : QString::number(pendingCount_)); }
+    paintDesign(p, designId_, frame_, busy_, pendingCount_);
+}
+void DesktopPetWidget::paintDesign(QPainter& p, const QString& requestedId, int frame, bool busy, int pendingCount)
+{
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing);
+    const QString id = normalizedDesignId(requestedId);
+    const QColor ink("#273d50");
+    const QColor accent = id == "space-bot" ? QColor("#bda8ff") : id == "cat-bot" ? QColor("#ffc478") : id == "mini-drone" ? QColor("#8ad6ff") : QColor("#92ead2");
+    auto shape = [&](const QColor& fill) { p.setPen(QPen(ink, 2.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)); p.setBrush(fill); };
+    auto round = [&](qreal x,qreal y,qreal w,qreal h,qreal r) { p.drawRoundedRect(QRectF(x,y,w,h),r,r); };
+    p.setPen(Qt::NoPen); p.setBrush(QColor(30,50,65,22)); p.drawEllipse(QRectF(30,133,84,8));
+    p.translate(0, std::sin(frame * .045) * 1.5);
+    QRectF face;
+    if (id == "space-bot") {
+        // Broad helmet, side pods, compact suit and unmistakable rocket boots.
+        shape(QColor("#7978bb")); round(18,48,14,30,6); round(112,48,14,30,6);
+        shape(QColor("#e5e3fa")); round(44,87,56,35,12);
+        shape(QColor("#8883cd")); round(40,119,25,12,4); round(79,119,25,12,4);
+        shape(QColor("#e5e3fa")); p.drawEllipse(QRectF(28,24,88,76));
+        shape(ink); face=QRectF(38,41,68,43); round(38,41,68,43,20);
+        p.setPen(QPen(Qt::white,3,Qt::SolidLine,Qt::RoundCap)); p.drawLine(QPointF(46,43),QPointF(56,36));
+        shape(accent); round(29,94,11,20,5); round(104,94,11,20,5);
+        p.setPen(QPen(ink,2.6)); p.drawLine(QPointF(72,24),QPointF(82,14)); p.setBrush(accent); p.drawEllipse(QPointF(84,12),4,4);
+    } else if (id == "cat-bot") {
+        // Angular ears and curled tail stay distinct even at the default size.
+        shape(QColor("#f7d7a8"));
+        QPainterPath tail; tail.moveTo(103,115); tail.cubicTo(132,119,127,89,116,94); p.setBrush(Qt::NoBrush); p.setPen(QPen(ink,10,Qt::SolidLine,Qt::RoundCap)); p.drawPath(tail); p.setPen(QPen(accent,5,Qt::SolidLine,Qt::RoundCap)); p.drawPath(tail);
+        shape(QColor("#f7d7a8")); round(44,83,56,43,17); round(39,118,25,12,5); round(80,118,25,12,5);
+        QPolygonF ears; ears << QPointF(31,48) << QPointF(31,16) << QPointF(57,35) << QPointF(87,35) << QPointF(113,16) << QPointF(113,48); p.drawPolygon(ears);
+        p.setPen(Qt::NoPen); p.setBrush(QColor("#ed9b83")); QPolygonF ear; ear << QPointF(37,34)<<QPointF(37,25)<<QPointF(49,35); p.drawPolygon(ear); ear.clear(); ear<<QPointF(95,35)<<QPointF(107,25)<<QPointF(107,34); p.drawPolygon(ear);
+        shape(QColor("#f7d7a8")); round(27,35,90,60,20);
+        shape(ink); face=QRectF(38,47,68,35); round(38,47,68,35,12);
+        p.setPen(QPen(ink,2.5,Qt::SolidLine,Qt::RoundCap)); p.drawLine(QPointF(22,63),QPointF(34,66)); p.drawLine(QPointF(22,76),QPointF(34,73)); p.drawLine(QPointF(110,66),QPointF(122,63)); p.drawLine(QPointF(110,73),QPointF(122,76));
+    } else if (id == "mini-drone") {
+        // Wide rotors and a floating diamond hull, with no humanoid legs.
+        shape(QColor("#a9dff1")); p.drawLine(QPointF(39,65),QPointF(23,39)); p.drawLine(QPointF(105,65),QPointF(121,39));
+        shape(QColor("#e3f4fa")); p.drawEllipse(QRectF(9,26,34,11)); p.drawEllipse(QRectF(101,26,34,11));
+        p.setPen(QPen(ink,2.6)); p.drawLine(QPointF(26,29),QPointF(26,42)); p.drawLine(QPointF(118,29),QPointF(118,42));
+        shape(accent); QPolygonF hull; hull<<QPointF(72,44)<<QPointF(119,76)<<QPointF(99,107)<<QPointF(72,121)<<QPointF(45,107)<<QPointF(25,76); p.drawPolygon(hull);
+        shape(QColor("#e3f4fa")); round(39,58,66,40,17);
+        shape(ink); face=QRectF(45,65,54,26); round(45,65,54,26,10);
+        p.setPen(QPen(ink,3,Qt::SolidLine,Qt::RoundCap)); p.drawLine(QPointF(54,116),QPointF(46,127)); p.drawLine(QPointF(90,116),QPointF(98,127));
+        p.setPen(QPen(accent,2,Qt::SolidLine,Qt::RoundCap)); const qreal spread=busy ? 4+frame%4 : 4; p.drawLine(QPointF(62-spread,128),QPointF(82+spread,128));
+    } else {
+        // Mint family: separate rounded square head, pear body and leaf antenna.
+        shape(QColor("#edf9f4")); round(22,87,14,25,7); round(108,87,14,25,7); round(43,119,23,12,5); round(78,119,23,12,5); round(39,83,66,43,17);
+        p.setPen(QPen(ink,2.6)); p.drawLine(QPointF(72,30),QPointF(72,17));
+        shape(accent); p.drawEllipse(QRectF(71,9,16,10));
+        shape(QColor("#edf9f4")); round(27,30,90, 60,22);
+        shape(ink); face=QRectF(37,43,70,34); round(37,43,70,34,12);
+        p.setPen(Qt::NoPen); p.setBrush(accent); round(55,91,34,6,3);
+    }
+    const bool blink = frame % 112 >= 108;
+    const qreal eyeHeight = blink ? 2 : 11;
+    const qreal eyeY = face.center().y()-2;
+    p.setPen(Qt::NoPen); p.setBrush(accent);
+    round(face.center().x()-21,eyeY-eyeHeight/2,7,eyeHeight,3);
+    round(face.center().x()+14,eyeY-eyeHeight/2,7,eyeHeight,3);
+    p.setPen(QPen(accent,2,Qt::SolidLine,Qt::RoundCap)); p.drawArc(QRectF(66,eyeY+2,12,8),200*16,140*16);
+    // A fixed chest indicator and top-right badge work across all silhouettes.
+    shape(ink); round(62,101,20,16,5);
+    if (busy) { p.setPen(QPen(accent,2.5,Qt::SolidLine,Qt::RoundCap)); p.setBrush(Qt::NoBrush); p.drawArc(QRectF(66,103,12,12),(frame*12%360)*16,240*16); }
+    else { p.setPen(Qt::NoPen); p.setBrush(accent); round(67,107,10,4,2); }
+    if (!busy && pendingCount > 0) {
+        p.setPen(QPen(Qt::white,1.5)); p.setBrush(QColor("#176d78")); p.drawEllipse(QRectF(107,43,26,26));
+        p.setPen(Qt::white); QFont f=p.font(); f.setPixelSize(11); f.setBold(true); p.setFont(f);
+        p.drawText(QRectF(107,43,26,26),Qt::AlignCenter,pendingCount>99 ? QStringLiteral("99+") : QString::number(pendingCount));
+    }
+    p.restore();
 }

@@ -9,6 +9,7 @@
 #include "QueueFloatingWidget.h"
 #include "WeeklyReportDialog.h"
 #include "DesktopPetWidget.h"
+#include <QtGui/QPainter>
 #include "PetAssistantPanel.h"
 #include "PetAssistantController.h"
 #include <QtCore/QCoreApplication>
@@ -186,6 +187,18 @@ private:
     std::function<CloseDecision()> closeDecisionHandler_;
 };
 
+class PetDesignPreview final : public QWidget
+{
+public:
+    explicit PetDesignPreview(QWidget* parent) : QWidget(parent) { setObjectName(QStringLiteral("desktopPetDesignPreview")); }
+    void setSelection(const QString& id, int percent) { id_ = id; percent_ = percent; setFixedSize(qRound(144*percent/100.0), qRound(150*percent/100.0)); update(); }
+protected:
+    void paintEvent(QPaintEvent*) override { QPainter painter(this); painter.scale(percent_/100.0, percent_/100.0); DesktopPetWidget::paintDesign(painter,id_,0,false,0); }
+private:
+    QString id_ = QStringLiteral("mint-bot");
+    int percent_ = 50;
+};
+
 class PetSettingsDialog final : public QDialog
 {
 public:
@@ -225,6 +238,19 @@ public:
         const int sizeIndex = sizeCombo_->findData(sizePercent);
         sizeCombo_->setCurrentIndex(sizeIndex >= 0 ? sizeIndex : sizeCombo_->findData(50));
         robotLayout->addRow(QStringLiteral("로봇 크기"), sizeCombo_);
+
+        designCombo_ = new QComboBox(robotGroup);
+        designCombo_->setObjectName(QStringLiteral("desktopPetDesignCombo"));
+        for (const QString& id : DesktopPetWidget::designIds())
+            designCombo_->addItem(DesktopPetWidget::designName(id), id);
+        designCombo_->setCurrentIndex(designCombo_->findData(DesktopPetWidget::normalizedDesignId(settings.value(AppConstants::PetDesignIdKey).toString())));
+        robotLayout->addRow(QStringLiteral("디자인"), designCombo_);
+        auto* preview = new PetDesignPreview(robotGroup);
+        const auto updatePreview = [this, preview]() { preview->setSelection(designCombo_->currentData().toString(), this->sizePercent()); };
+        connect(designCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [updatePreview](int) { updatePreview(); });
+        connect(sizeCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [updatePreview](int) { updatePreview(); });
+        updatePreview();
+        robotLayout->addRow(QStringLiteral("미리보기"), preview);
 
         alwaysOnTopCheck_ = new QCheckBox(QStringLiteral("로봇을 항상 위에 표시"), robotGroup);
         alwaysOnTopCheck_->setObjectName(QStringLiteral("desktopPetAlwaysOnTopCheck"));
@@ -279,11 +305,13 @@ private:
         const bool visible = petVisible();
         const bool top = alwaysOnTop();
         QSettings settings;
+        const QString design = DesktopPetWidget::normalizedDesignId(designCombo_->currentData().toString());
+        settings.setValue(AppConstants::PetDesignIdKey, design);
         settings.setValue(AppConstants::PetSizePercentKey, size);
         settings.setValue(AppConstants::PetAlwaysOnTopKey, top);
         settings.setValue(AppConstants::PetVisibleKey, visible);
         settings.sync();
-        if (pet_) pet_->setSizePercent(size);
+        if (pet_) { pet_->setDesignId(design); pet_->setSizePercent(size); }
         if (visibilityHandler_) visibilityHandler_(visible);
         if (pet_) pet_->setAlwaysOnTop(top);
         settings.sync();
@@ -292,6 +320,7 @@ private:
 
     QCheckBox* visibleCheck_ = nullptr;
     QComboBox* sizeCombo_ = nullptr;
+    QComboBox* designCombo_ = nullptr;
     QCheckBox* alwaysOnTopCheck_ = nullptr;
     QLabel* statusLabel_ = nullptr;
     DesktopPetWidget* pet_ = nullptr;
@@ -985,6 +1014,9 @@ void TaskQueueWidget::setupDesktopPet()
     bool sizeOk = false;
     const int savedSize = settings.value(AppConstants::PetSizePercentKey, 50).toInt(&sizeOk);
     desktopPet_->setSizePercent(sizeOk ? savedSize : 50);
+    const QString design = DesktopPetWidget::normalizedDesignId(settings.value(AppConstants::PetDesignIdKey).toString());
+    desktopPet_->setDesignId(design);
+    settings.setValue(AppConstants::PetDesignIdKey, design);
     desktopPet_->setAlwaysOnTop(settings.value(AppConstants::PetAlwaysOnTopKey, true).toBool());
     if (settings.contains(AppConstants::PetPositionKey)) desktopPet_->restorePosition(settings.value(AppConstants::PetPositionKey).toPoint());
     const auto newTask=[this]() {addTaskFromFloatingWidget();};

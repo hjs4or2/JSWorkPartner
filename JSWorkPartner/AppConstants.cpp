@@ -31,6 +31,7 @@ const QString FloatingQueueVisibleKey =
 const QString PetPositionKey = QStringLiteral("desktopPet/position");
 const QString PetVisibleKey = QStringLiteral("desktopPet/visible");
 const QString PetSizePercentKey = QStringLiteral("desktopPet/sizePercent");
+const QString PetDesignIdKey = QStringLiteral("desktopPet/designId");
 const QString PetAlwaysOnTopKey = QStringLiteral("desktopPet/alwaysOnTop");
 const QString PetMcpExecutableKey = QStringLiteral("desktopPet/mcpExecutable");
 const QString RedmineUrlKey = QStringLiteral("redmine/baseUrl");

@@ -22,6 +22,7 @@ extern const QString FloatingQueueVisibleKey;
 extern const QString PetPositionKey;
 extern const QString PetVisibleKey;
 extern const QString PetSizePercentKey;
+extern const QString PetDesignIdKey;
 extern const QString PetAlwaysOnTopKey;
 extern const QString PetMcpExecutableKey;
 extern const QString RedmineUrlKey;

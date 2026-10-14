@@ -1,6 +1,9 @@
 #pragma once
 #include <QtWidgets/QWidget>
 #include <QtCore/QTimer>
+#include <QtCore/QStringList>
+
+class QPainter;
 
 class DesktopPetWidget final : public QWidget
 {
@@ -8,6 +11,13 @@ class DesktopPetWidget final : public QWidget
 public:
     explicit DesktopPetWidget(QWidget* parent = nullptr);
     void setBusy(bool busy);
+    void setDesignId(const QString& id);
+    QString designId() const { return designId_; }
+    static QString normalizedDesignId(const QString& id);
+    static QStringList designIds();
+    static QString designName(const QString& id);
+    // Shared logical 144x150 canvas for the desktop pet and settings preview.
+    static void paintDesign(QPainter& painter, const QString& id, int frame, bool busy, int pendingCount);
     void setPendingCount(int count);
     void setSizePercent(int percent);
     int sizePercent() const { return sizePercent_; }
@@ -35,6 +45,7 @@ protected:
 private:
     QPoint boundedPosition(const QPoint& position) const;
     QTimer animation_;
+    QString designId_ = QStringLiteral("mint-bot");
     int frame_ = 0;
     int sizePercent_ = 50;
     int pendingCount_ = 0;

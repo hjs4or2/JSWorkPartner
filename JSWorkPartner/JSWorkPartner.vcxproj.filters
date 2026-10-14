@@ -64,6 +64,24 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="DesktopPetWidget.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="PetAssistantPanel.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="CodexAssistantBackend.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="LocalTaskToolClient.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="PetAssistantController.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="$(IntDir)moc_DesktopPetWidget.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="$(IntDir)moc_PetAssistantPanel.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="$(IntDir)moc_CodexAssistantBackend.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="$(IntDir)moc_LocalTaskToolClient.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="$(IntDir)moc_PetAssistantController.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClInclude Include="DesktopPetWidget.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="PetAssistantPanel.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="CodexAssistantBackend.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="LocalTaskToolClient.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="PetAssistantController.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="PetJsonRpcProcess.h"><Filter>Header Files</Filter></ClInclude>
+  </ItemGroup>
+  <ItemGroup>
     <ClInclude Include="WeeklyReportSettings.h">
       <Filter>Header Files</Filter>
     </ClInclude>

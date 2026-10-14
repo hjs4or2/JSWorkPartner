@@ -8,6 +8,9 @@
 #include "NullableDateEdit.h"
 #include "QueueFloatingWidget.h"
 #include "WeeklyReportDialog.h"
+#include "DesktopPetWidget.h"
+#include "PetAssistantPanel.h"
+#include "PetAssistantController.h"
 #include <QtCore/QCoreApplication>
 #include <QtCore/QDate>
 #include <QtCore/QDir>
@@ -31,11 +34,14 @@
 #include <QtWidgets/QAction>
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QCalendarWidget>
+#include <QtWidgets/QCheckBox>
 #include <QtWidgets/QComboBox>
+#include <QtWidgets/QDialogButtonBox>
 #include <QtWidgets/QDateEdit>
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QFileDialog>
 #include <QtWidgets/QFormLayout>
+#include <QtWidgets/QGroupBox>
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QHeaderView>
 #include <QtWidgets/QLabel>
@@ -178,6 +184,118 @@ protected:
 
 private:
     std::function<CloseDecision()> closeDecisionHandler_;
+};
+
+class PetSettingsDialog final : public QDialog
+{
+public:
+    explicit PetSettingsDialog(PetAssistantController* assistantController, QWidget* parent = nullptr)
+        : QDialog(parent)
+    {
+        setWindowTitle(QStringLiteral("로봇 설정"));
+        setMinimumWidth(420);
+
+        QSettings settings;
+        const bool visible = settings.value(AppConstants::PetVisibleKey, true).toBool();
+        int sizePercent = 50;
+        if (settings.contains(AppConstants::PetSizePercentKey)) {
+            bool ok = false;
+            const int stored = settings.value(AppConstants::PetSizePercentKey).toInt(&ok);
+            sizePercent = DesktopPetWidget::normalizedSizePercent(ok ? stored : 50);
+        }
+        const bool alwaysOnTop = settings.value(AppConstants::PetAlwaysOnTopKey, true).toBool();
+
+        auto* layout = new QVBoxLayout(this);
+        auto* description = new QLabel(
+            QStringLiteral("저장하면 로봇 설정에 즉시 적용됩니다. 취소하거나 닫으면 변경되지 않습니다."), this);
+        description->setWordWrap(true);
+        layout->addWidget(description);
+
+        auto* robotGroup = new QGroupBox(QStringLiteral("바탕화면 로봇"), this);
+        auto* robotLayout = new QFormLayout(robotGroup);
+        visibleCheck_ = new QCheckBox(QStringLiteral("바탕화면에 로봇 표시"), robotGroup);
+        visibleCheck_->setObjectName(QStringLiteral("desktopPetVisibleCheck"));
+        visibleCheck_->setChecked(visible);
+        robotLayout->addRow(visibleCheck_);
+
+        sizeCombo_ = new QComboBox(robotGroup);
+        sizeCombo_->setObjectName(QStringLiteral("desktopPetSizeCombo"));
+        for (const int value : {25, 50, 75, 100, 125, 150})
+            sizeCombo_->addItem(QStringLiteral("%1%").arg(value), value);
+        const int sizeIndex = sizeCombo_->findData(sizePercent);
+        sizeCombo_->setCurrentIndex(sizeIndex >= 0 ? sizeIndex : sizeCombo_->findData(50));
+        robotLayout->addRow(QStringLiteral("로봇 크기"), sizeCombo_);
+
+        alwaysOnTopCheck_ = new QCheckBox(QStringLiteral("로봇을 항상 위에 표시"), robotGroup);
+        alwaysOnTopCheck_->setObjectName(QStringLiteral("desktopPetAlwaysOnTopCheck"));
+        alwaysOnTopCheck_->setChecked(alwaysOnTop);
+        robotLayout->addRow(alwaysOnTopCheck_);
+        layout->addWidget(robotGroup);
+
+        auto* assistantGroup = new QGroupBox(QStringLiteral("AI 연결 정보 (읽기 전용)"), this);
+        auto* assistantLayout = new QFormLayout(assistantGroup);
+        assistantLayout->addRow(QStringLiteral("로그인"), new QLabel(QStringLiteral("현재 Codex 로그인 사용"), assistantGroup));
+        assistantLayout->addRow(QStringLiteral("지원 CLI"), new QLabel(QStringLiteral("0.161.0"), assistantGroup));
+        assistantLayout->addRow(QStringLiteral("지원 모델"), new QLabel(QStringLiteral("gpt-6.1-sol"), assistantGroup));
+        statusLabel_ = new QLabel(
+            assistantController ? assistantController->connectionStatus() : QStringLiteral("연결 전"), assistantGroup);
+        statusLabel_->setObjectName(QStringLiteral("petAssistantConnectionStatus"));
+        assistantLayout->addRow(QStringLiteral("연결 상태"), statusLabel_);
+        auto* statusNote = new QLabel(
+            QStringLiteral("연결 전은 실제 로그인 확인을 시작하기 전 상태입니다. 첫 대화를 보내면 로그인과 연결 상태를 확인합니다."), assistantGroup);
+        statusNote->setWordWrap(true);
+        assistantLayout->addRow(statusNote);
+        layout->addWidget(assistantGroup);
+
+        if (assistantController) {
+            connect(assistantController, &PetAssistantController::connectionStatusChanged,
+                    statusLabel_, [this](const QString& status) { statusLabel_->setText(status); });
+        }
+
+        auto* buttons = new QDialogButtonBox(this);
+        buttons->setObjectName(QStringLiteral("desktopPetSettingsButtons"));
+        auto* saveButton = buttons->addButton(QStringLiteral("저장"), QDialogButtonBox::AcceptRole);
+        saveButton->setObjectName(QStringLiteral("desktopPetSettingsSaveButton"));
+        auto* cancelButton = buttons->addButton(QStringLiteral("취소"), QDialogButtonBox::RejectRole);
+        connect(saveButton, &QPushButton::clicked, this, [this]() { saveAndApply(); });
+        connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
+        layout->addWidget(buttons);
+    }
+
+    void setApplyHandler(DesktopPetWidget* pet, std::function<void(bool)> visibilityHandler)
+    {
+        pet_ = pet;
+        visibilityHandler_ = std::move(visibilityHandler);
+    }
+
+    bool petVisible() const { return visibleCheck_->isChecked(); }
+    int sizePercent() const { return sizeCombo_->currentData().toInt(); }
+    bool alwaysOnTop() const { return alwaysOnTopCheck_->isChecked(); }
+
+private:
+    void saveAndApply()
+    {
+        const int size = sizePercent();
+        const bool visible = petVisible();
+        const bool top = alwaysOnTop();
+        QSettings settings;
+        settings.setValue(AppConstants::PetSizePercentKey, size);
+        settings.setValue(AppConstants::PetAlwaysOnTopKey, top);
+        settings.setValue(AppConstants::PetVisibleKey, visible);
+        settings.sync();
+        if (pet_) pet_->setSizePercent(size);
+        if (visibilityHandler_) visibilityHandler_(visible);
+        if (pet_) pet_->setAlwaysOnTop(top);
+        settings.sync();
+        accept();
+    }
+
+    QCheckBox* visibleCheck_ = nullptr;
+    QComboBox* sizeCombo_ = nullptr;
+    QCheckBox* alwaysOnTopCheck_ = nullptr;
+    QLabel* statusLabel_ = nullptr;
+    DesktopPetWidget* pet_ = nullptr;
+    std::function<void(bool)> visibilityHandler_;
 };
 }
 
@@ -608,17 +726,7 @@ TaskQueueWidget::TaskQueueWidget(
         new QPushButton(QStringLiteral("업무 보고서"), weeklySummaryCard);
     weeklyReportButton->setFixedHeight(30);
     weeklySummaryHeaderLayout->addWidget(weeklyReportButton);
-    connect(weeklyReportButton, &QPushButton::clicked, this, [this]() {
-        WeeklyReportDialog dialog(this);
-        dialog.setLocalTaskProvider([this]() {
-            QList<Task> tasks;
-            for (int row = 0; row < completedViewModel_.taskCount(); ++row)
-                tasks.append(completedViewModel_.taskAt(row));
-            return tasks;
-        });
-        dialog.exec();
-        updateSelectedTaskDetails();
-    });
+    connect(weeklyReportButton, &QPushButton::clicked, this, [this]() { showWeeklyReport(); });
 
     weeklySummaryLayout->addLayout(weeklySummaryHeaderLayout);
     weeklySummaryLayout->addWidget(weeklySummaryLabel_);
@@ -796,6 +904,7 @@ TaskQueueWidget::TaskQueueWidget(
     connect(externalRefreshTimer, &QTimer::timeout, this, [this]() { refreshExternalTasks(); });
     externalWatcher_->start();
     externalRefreshTimer->start();
+    setupDesktopPet();
     setupTrayIcon();
     updateUiState();
     updateSelectedTaskDetails();
@@ -804,6 +913,9 @@ TaskQueueWidget::TaskQueueWidget(
 
 TaskQueueWidget::~TaskQueueWidget()
 {
+    if (assistantController_) {assistantController_->shutdown();delete assistantController_;assistantController_=nullptr;}
+    delete assistantPanel_;assistantPanel_=nullptr;
+    delete desktopPet_;desktopPet_=nullptr;
     delete externalWatcher_;
     externalWatcher_ = nullptr;
     QSettings settings;
@@ -859,20 +971,72 @@ void TaskQueueWidget::refreshExternalTasks()
 
 void TaskQueueWidget::showInitialView()
 {
-    if (floatingQueueWidget_ == nullptr)
-    {
-        show();
-        return;
-    }
+    const bool hasTray=trayIcon_ && trayIcon_->isVisible();
+    if (QSettings().value(AppConstants::PetVisibleKey,true).toBool()) showDesktopPet();
+    if (!hasTray) showFromTray();
+}
 
-    if (floatingQueueAction_ != nullptr)
-    {
-        floatingQueueAction_->setChecked(true);
-    }
-    floatingQueueWidget_->showNormal();
-    floatingQueueWidget_->show();
-    floatingQueueWidget_->raise();
-    floatingQueueWidget_->activateWindow();
+void TaskQueueWidget::setupDesktopPet()
+{
+    desktopPet_=new DesktopPetWidget;
+    assistantPanel_=new PetAssistantPanel;
+    assistantController_=new PetAssistantController(*desktopPet_,*assistantPanel_,pendingViewModel_.databasePath(),this);
+    QSettings settings;
+    bool sizeOk = false;
+    const int savedSize = settings.value(AppConstants::PetSizePercentKey, 50).toInt(&sizeOk);
+    desktopPet_->setSizePercent(sizeOk ? savedSize : 50);
+    desktopPet_->setAlwaysOnTop(settings.value(AppConstants::PetAlwaysOnTopKey, true).toBool());
+    if (settings.contains(AppConstants::PetPositionKey)) desktopPet_->restorePosition(settings.value(AppConstants::PetPositionKey).toPoint());
+    const auto newTask=[this]() {addTaskFromFloatingWidget();};
+    const auto tasks=[this]() {showFromTray();queueTabs_->setCurrentIndex(0);};
+    connect(desktopPet_,&DesktopPetWidget::assistantRequested,assistantController_,&PetAssistantController::showAssistant);
+    connect(desktopPet_,&DesktopPetWidget::newTaskRequested,this,newTask);
+    connect(desktopPet_,&DesktopPetWidget::tasksRequested,this,tasks);
+    connect(desktopPet_,&DesktopPetWidget::weeklyReportRequested,this,[this]() {showWeeklyReport();});
+    connect(desktopPet_,&DesktopPetWidget::settingsRequested,this,&TaskQueueWidget::showPetSettingsDialog);
+    connect(desktopPet_,&DesktopPetWidget::hideRequested,this,[this]() {hideDesktopPet();});
+    connect(desktopPet_,&DesktopPetWidget::positionChanged,this,[](QPoint position) {QSettings().setValue(AppConstants::PetPositionKey,position);});
+    connect(assistantPanel_,&PetAssistantPanel::newTaskRequested,this,newTask);
+    connect(assistantPanel_,&PetAssistantPanel::tasksRequested,this,tasks);
+    connect(assistantPanel_,&PetAssistantPanel::weeklyReportRequested,this,[this]() {showWeeklyReport();});
+    connect(assistantController_,&PetAssistantController::tasksChanged,this,[this]() {if (externalWatcher_) externalWatcher_->requestRefresh();});
+    connect(qApp,&QCoreApplication::aboutToQuit,assistantController_,&PetAssistantController::shutdown);
+    const auto count=[this]() {desktopPet_->setPendingCount(pendingViewModel_.taskCount());};
+    connect(&pendingViewModel_,&QAbstractItemModel::modelReset,this,count);
+    connect(&pendingViewModel_,&QAbstractItemModel::rowsInserted,this,count);
+    connect(&pendingViewModel_,&QAbstractItemModel::rowsRemoved,this,count);
+    count();
+    // A hidden pet can be recovered even on systems without a system tray.
+    auto* reopen=new QAction(QStringLiteral("로봇과 대화 열기"),this);
+    reopen->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+Space")));reopen->setShortcutContext(Qt::ApplicationShortcut);addAction(reopen);
+    connect(reopen,&QAction::triggered,this,[this]() {showDesktopPet();assistantController_->showAssistant();});
+}
+void TaskQueueWidget::showDesktopPet()
+{ if (!desktopPet_) return;desktopPet_->ensureVisibleOnScreen();desktopPet_->show();desktopPet_->raise();QSettings().setValue(AppConstants::PetVisibleKey,true); }
+void TaskQueueWidget::hideDesktopPet()
+{
+    if (desktopPet_) desktopPet_->hide();if (assistantPanel_) assistantPanel_->hide();
+    QSettings().setValue(AppConstants::PetVisibleKey,false);
+    if (!trayIcon_ || !trayIcon_->isVisible()) showFromTray();
+}
+void TaskQueueWidget::showPetSettingsDialog()
+{
+    PetSettingsDialog dialog(assistantController_);
+    dialog.setApplyHandler(desktopPet_, [this](bool visible) {
+        if (visible) showDesktopPet();
+        else hideDesktopPet();
+    });
+    dialog.exec();
+}
+void TaskQueueWidget::showWeeklyReport()
+{
+    WeeklyReportDialog dialog(this);
+    dialog.setLocalTaskProvider([this]() {
+        QList<Task> tasks;
+        for (int row=0;row<completedViewModel_.taskCount();++row) tasks.append(completedViewModel_.taskAt(row));
+        return tasks;
+    });
+    dialog.exec();updateSelectedTaskDetails();
 }
 
 void TaskQueueWidget::closeEvent(QCloseEvent* event)
@@ -918,6 +1082,10 @@ void TaskQueueWidget::setupTrayIcon()
     QApplication::setQuitOnLastWindowClosed(false);
 
     auto* trayMenu = new QMenu(this);
+    QAction* petAction=trayMenu->addAction(QStringLiteral("로봇 표시"));
+    QAction* assistantAction=trayMenu->addAction(QStringLiteral("AI 대화 열기"));
+    QAction* hidePetAction=trayMenu->addAction(QStringLiteral("로봇·대화 숨기기"));
+    trayMenu->addSeparator();
     QAction* showAction = trayMenu->addAction(QStringLiteral("창 열기"));
     floatingQueueAction_ =
         trayMenu->addAction(QStringLiteral("퀘스트 보드 표시"));
@@ -987,6 +1155,9 @@ void TaskQueueWidget::setupTrayIcon()
         [this](int row) { completeTaskFromFloatingWidget(row); });
 
     connect(showAction, &QAction::triggered, this, [this]() { showFromTray(); });
+    connect(petAction,&QAction::triggered,this,[this]() {showDesktopPet();});
+    connect(assistantAction,&QAction::triggered,this,[this]() {showDesktopPet();assistantController_->showAssistant();});
+    connect(hidePetAction,&QAction::triggered,this,[this]() {hideDesktopPet();});
     connect(
         settingsAction,
         &QAction::triggered,
@@ -1009,6 +1180,7 @@ void TaskQueueWidget::setupTrayIcon()
             }
         });
     connect(quitAction, &QAction::triggered, this, [this]() {
+        assistantController_->shutdown();
         trayIcon_->hide();
         QApplication::quit();
     });
@@ -1023,13 +1195,8 @@ void TaskQueueWidget::setupTrayIcon()
             }
         });
 
-    if (settings.value(
-            AppConstants::FloatingQueueVisibleKey,
-            false).toBool())
-    {
-        floatingQueueAction_->setChecked(true);
-    }
-
+    // The pet is the startup view. Keep the board's geometry/opacity and manual
+    // tray toggle, but do not replay the previous version's auto-visible state.
     trayIcon_->show();
 }
 
@@ -1062,6 +1229,13 @@ void TaskQueueWidget::showSettingsDialog()
     auto* descriptionLabel = new QLabel(
         QStringLiteral("프로그램 전체에 적용할 화면 모드를 선택하세요."),
         &dialog);
+
+    auto* petSettingsButton = new QPushButton(QStringLiteral("로봇 설정 열기..."), &dialog);
+    petSettingsButton->setObjectName(QStringLiteral("openRobotSettingsButton"));
+    auto* petSettingsDescription = new QLabel(
+        QStringLiteral("로봇 설정은 별도 창에서 저장하고 즉시 적용합니다."), &dialog);
+    petSettingsDescription->setWordWrap(true);
+    connect(petSettingsButton, &QPushButton::clicked, &dialog, [this]() { showPetSettingsDialog(); });
 
     auto* themeLabel = new QLabel(QStringLiteral("화면 모드"), &dialog);
     auto* themeCombo = new QComboBox(&dialog);
@@ -1166,6 +1340,8 @@ void TaskQueueWidget::showSettingsDialog()
     layout->setSpacing(12);
     layout->addWidget(titleLabel);
     layout->addWidget(descriptionLabel);
+    layout->addWidget(petSettingsButton);
+    layout->addWidget(petSettingsDescription);
     layout->addSpacing(8);
     layout->addLayout(themeLayout);
     layout->addSpacing(12);

@@ -22,6 +22,9 @@ class NullableDateEdit;
 class QueueFloatingWidget;
 class TaskQueueViewModel;
 class ExternalTaskWatcher;
+class DesktopPetWidget;
+class PetAssistantPanel;
+class PetAssistantController;
 struct Task;
 
 class TaskQueueWidget final : public QWidget
@@ -40,6 +43,11 @@ protected:
 
 private:
     void setupTrayIcon();
+    void setupDesktopPet();
+    void showDesktopPet();
+    void hideDesktopPet();
+    void showPetSettingsDialog();
+    void showWeeklyReport();
     void showSettingsDialog();
     void showFromTray();
     void showTrayHint();
@@ -109,6 +117,9 @@ private:
     QAction* floatingQueueAction_ = nullptr;
     bool trayHintShown_ = false;
     ExternalTaskWatcher* externalWatcher_ = nullptr;
+    DesktopPetWidget* desktopPet_ = nullptr;
+    PetAssistantPanel* assistantPanel_ = nullptr;
+    PetAssistantController* assistantController_ = nullptr;
     bool applyingExternal_ = false;
     Task editingOriginal_;
 };

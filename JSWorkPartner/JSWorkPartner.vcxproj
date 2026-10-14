@@ -112,6 +112,16 @@ if exist "$(VCInstallDir)Redist\MSVC\$(VCToolsRedistVersion)\x64\Microsoft.VC143
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AppConstants.cpp" />
+    <ClCompile Include="DesktopPetWidget.cpp" />
+    <ClCompile Include="PetAssistantPanel.cpp" />
+    <ClCompile Include="CodexAssistantBackend.cpp" />
+    <ClCompile Include="LocalTaskToolClient.cpp" />
+    <ClCompile Include="PetAssistantController.cpp" />
+    <ClCompile Include="$(IntDir)moc_DesktopPetWidget.cpp" />
+    <ClCompile Include="$(IntDir)moc_PetAssistantPanel.cpp" />
+    <ClCompile Include="$(IntDir)moc_CodexAssistantBackend.cpp" />
+    <ClCompile Include="$(IntDir)moc_LocalTaskToolClient.cpp" />
+    <ClCompile Include="$(IntDir)moc_PetAssistantController.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="NullableDateEdit.cpp" />
     <ClCompile Include="QueueFloatingWidget.cpp" />
@@ -127,6 +137,12 @@ if exist "$(VCInstallDir)Redist\MSVC\$(VCToolsRedistVersion)\x64\Microsoft.VC143
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AppConstants.h" />
+    <ClInclude Include="DesktopPetWidget.h" />
+    <ClInclude Include="PetAssistantPanel.h" />
+    <ClInclude Include="CodexAssistantBackend.h" />
+    <ClInclude Include="LocalTaskToolClient.h" />
+    <ClInclude Include="PetAssistantController.h" />
+    <ClInclude Include="PetJsonRpcProcess.h" />
     <ClInclude Include="DeadlineColorDelegate.h" />
     <ClInclude Include="NullableDateEdit.h" />
     <ClInclude Include="QueueFloatingWidget.h" />
@@ -143,6 +159,14 @@ if exist "$(VCInstallDir)Redist\MSVC\$(VCToolsRedistVersion)\x64\Microsoft.VC143
   </ItemGroup>
   <Target Name="GenerateVersionHeader" BeforeTargets="ClCompile">
     <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(SolutionDir)scripts\GenerateVersion.ps1&quot; -RepositoryRoot &quot;$(SolutionDir).&quot; -OutputPath &quot;$(IntDir)GeneratedVersion.h&quot;" />
+  </Target>
+  <ItemGroup>
+    <PetMocHeader Include="DesktopPetWidget.h;PetAssistantPanel.h;CodexAssistantBackend.h;LocalTaskToolClient.h;PetAssistantController.h" />
+  </ItemGroup>
+  <Target Name="GeneratePetMoc" BeforeTargets="ClCompile"
+          Inputs="@(PetMocHeader)" Outputs="@(PetMocHeader->'$(IntDir)moc_%(Filename).cpp')">
+    <MakeDir Directories="$(IntDir)" />
+    <Exec Command="&quot;$(QtInstall)\bin\moc.exe&quot; &quot;%(PetMocHeader.FullPath)&quot; -o &quot;$(IntDir)moc_%(PetMocHeader.Filename).cpp&quot;" />
   </Target>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">

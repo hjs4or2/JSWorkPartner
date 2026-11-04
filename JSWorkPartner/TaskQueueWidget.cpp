@@ -25,6 +25,7 @@
 #include <QtGui/QCloseEvent>
 #include <QtGui/QDesktopServices>
 #include <QtGui/QFont>
+#include <QtGui/QInputMethod>
 #include <QtGui/QKeySequence>
 #include <QtWidgets/QAbstractItemView>
 #include <QtWidgets/QAction>
@@ -1322,6 +1323,9 @@ void TaskQueueWidget::showTrayHint()
 
 void TaskQueueWidget::addTask()
 {
+    // Commit the focused editor's IME composition before reading form values.
+    QGuiApplication::inputMethod()->commit();
+
     const bool wasEditing =
         editingTaskId_ != 0 && editingViewModel_ != nullptr;
     const qint64 editedTaskId = editingTaskId_;
